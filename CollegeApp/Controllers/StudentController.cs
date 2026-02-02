@@ -38,6 +38,7 @@ namespace CollegeApp.Controllers
             //return Ok(CollegeRepository.Students);
         }
 
+
         [HttpGet]
         [Route("{id:int}", Name = "GetStudentById")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -66,6 +67,34 @@ namespace CollegeApp.Controllers
             return Ok(studentDTO);
         }
 
+
+        [HttpPost]
+        [Route("Create")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public ActionResult<StudentDTO> GetStudentByName([FromBody] StudentDTO model)
+        {
+            if (model == null)
+                return BadRequest();
+
+            int newId = CollegeRepository.Students.LastOrDefault().Id + 1;
+
+            Student student = new Student
+            {
+                Id = newId,
+                StudentName = model.StudentName,
+                Email = model.Email,
+                Address = model.Address
+            };
+
+            CollegeRepository.Students.Add(student);
+
+            model.Id = student.Id;
+
+            return Ok(student);
+        }
+
         [HttpGet("{name:alpha}", Name = "GetStudentByName")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -90,7 +119,7 @@ namespace CollegeApp.Controllers
                 Address = student.Address
             };
 
-            return Ok(st);
+            return Ok(studentDTO);
         }
 
         [HttpDelete("{id}", Name = "DeleteStudentById")]
