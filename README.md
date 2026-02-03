@@ -21,6 +21,7 @@ A comprehensive guide to understanding Web APIs, their evolution, and practical 
 13. [Model Validation – Preventing Invalid Data](#13-model-validation--preventing-invalid-data)
 14. [Built-in Validation Attributes](#14-built-in-validation-attributes)
 15. [Custom Validation Attributes](#15-custom-validation-attributes)
+16. [Dependency Injection in Web API](#16-dependency-injection-in-web-api)
 
 ---
 
@@ -1744,6 +1745,537 @@ public ActionResult<StudentDTO> CreateStudent([FromBody] StudentDTO model)
 
 ---
 
+## 16. Dependency Injection in Web API
+
+### 🤔 What is Dependency Injection?
+
+**Dependency Injection (DI)** is a design pattern that implements **Inversion of Control (IoC)** for managing dependencies between classes. Instead of a class creating its own dependencies, they are "injected" from outside.
+
+Think of it like ordering food at a restaurant – you don't go to the kitchen to cook; the waiter **injects** the food to your table!
+
+---
+
+### ❌ The Problem: Tightly Coupled Code
+
+Without Dependency Injection, each controller creates its own instance of the service:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              TIGHTLY COUPLED (Without DI)                      │
+│                                                                 │
+│  StudentController           DemoController                     │
+│  ┌──────────────────┐       ┌──────────────────┐             │
+│  │ _logger =       │       │ _logger =       │             │
+│  │ new LogToDB()   │       │ new LogToDB()   │             │
+│  └────────┬─────────┘       └────────┬─────────┘             │
+│           │                         │                          │
+│           ▼                         ▼                          │
+│  ┌──────────────────┐       ┌──────────────────┐             │
+│  │     LogToDB     │       │     LogToDB     │  ❌ Multiple │
+│  │    Instance 1   │       │    Instance 2   │     Instances│
+│  └──────────────────┘       └──────────────────┘             │
+│                                                                 │
+│  ❌ Each controller creates its own instance                     │
+│  ❌ To change logger, must modify ALL controllers                │
+│  ❌ Hard to test (can't mock dependencies)                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Example: Tightly Coupled Code (BAD ❌)**
+
+```csharp
+public class DemoController : ControllerBase
+{
+    private readonly IMyLogger _myLogger;
+
+    // ❌ Tightly Coupled - Creates its own instance
+    public DemoController()
+    {
+        _myLogger = new LogToDB();  // Hardcoded dependency!
+    }
+}
+```
+
+**Problems with Tightly Coupled Code:**
+
+| Issue                  | Description                                                    |
+| ---------------------- | -------------------------------------------------------------- |
+| **Multiple Instances** | Each controller creates its own logger instance                |
+| **Hard to Change**     | Need to change code in ALL controllers to switch logger        |
+| **Not Testable**       | Can't mock dependencies for unit testing                       |
+| **Violates SOLID**     | Breaks Single Responsibility & Dependency Inversion principles |
+
+---
+
+### ✅ The Solution: Loosely Coupled with DI
+
+With Dependency Injection, a single registration point manages all instances:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              LOOSELY COUPLED (With DI)                         │
+│                                                                 │
+│                   Program.cs (DI Container)                     │
+│                  ┌─────────────────────────┐                      │
+│                  │ builder.Services       │                      │
+│                  │   .AddScoped<IMyLogger,│                      │
+│                  │    LogToMemoryServer>();│                     │
+│                  └────────────┬────────────┘                      │
+│                              │                                  │
+│              ┌───────────────┴───────────────┐                │
+│              │               │               │                │
+│              ▼               ▼               ▼                │
+│  StudentController   DemoController   OtherController       │
+│  ┌───────────────┐   ┌───────────────┐   ┌───────────────┐  │
+│  │ IMyLogger    │   │ IMyLogger    │   │ IMyLogger    │  │
+│  │ (Injected)   │   │ (Injected)   │   │ (Injected)   │  │
+│  └───────────────┘   └───────────────┘   └───────────────┘  │
+│                                                                 │
+│  ✅ One registration point for all controllers                   │
+│  ✅ Change logger in ONE place (Program.cs)                      │
+│  ✅ Easy to test with mock implementations                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 🤔 Why Use Dependency Injection?
+
+| Benefit                    | Description                                      |
+| -------------------------- | ------------------------------------------------ |
+| **Loose Coupling**         | Classes don't create their own dependencies      |
+| **Single Point of Change** | Change implementation in one place (Program.cs)  |
+| **Testability**            | Easy to inject mock implementations for testing  |
+| **Maintainability**        | Easier to modify and extend the application      |
+| **Reusability**            | Same interface can have multiple implementations |
+| **SOLID Principles**       | Follows Dependency Inversion Principle           |
+
+---
+
+### 📦 When and Where to Use DI?
+
+**When to Use:**
+
+- ✅ When a class needs external services (logging, database, email, etc.)
+- ✅ When you want to swap implementations easily
+- ✅ When writing unit tests with mock objects
+- ✅ When following SOLID principles
+
+**Where to Register:**
+
+- ✅ In `Program.cs` using `builder.Services`
+- ✅ Before `builder.Build()` is called
+
+---
+
+### � Types of Dependency Injection
+
+There are **three main ways** to inject dependencies into a class:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    DI INJECTION TYPES                           │
+│                                                                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │   Constructor   │  │    Property     │  │     Method      │ │
+│  │    Injection    │  │    Injection    │  │    Injection    │ │
+│  │   ⭐ Preferred  │  │   Optional DI   │  │   Runtime DI    │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+│         │                     │                     │          │
+│         ▼                     ▼                     ▼          │
+│  Via Constructor      Via Property Setter   Via Method Param   │
+│  Parameters           (public set)          (action methods)   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### 1️⃣ Constructor Injection (⭐ Recommended)
+
+Dependencies are provided through the **class constructor**. This is the **most common and preferred** approach in ASP.NET Core.
+
+```csharp
+public class DemoController : ControllerBase
+{
+    private readonly IMyLogger _myLogger;
+
+    // ✅ Constructor Injection - Dependencies injected via constructor
+    public DemoController(IMyLogger myLogger)
+    {
+        _myLogger = myLogger;  // Dependency is injected here
+    }
+
+    [HttpGet]
+    public ActionResult Index()
+    {
+        _myLogger.Log("Index method called");
+        return Ok();
+    }
+}
+```
+
+**Advantages:**
+
+- ✅ Dependencies are **required** (enforced at compile time)
+- ✅ **Immutable** - dependencies set once, can't be changed
+- ✅ Easy to see **all dependencies** in one place
+- ✅ **Testable** - easy to mock dependencies
+
+---
+
+#### 2️⃣ Property Injection (Setter Injection)
+
+Dependencies are provided through **public properties**. Used when dependencies are **optional**.
+
+```csharp
+public class DemoController : ControllerBase
+{
+    // ✅ Property Injection - Dependency can be set via property
+    public IMyLogger? MyLogger { get; set; }
+
+    [HttpGet]
+    public ActionResult Index()
+    {
+        // Must check for null since it's optional
+        MyLogger?.Log("Index method called");
+        return Ok();
+    }
+}
+```
+
+**Advantages:**
+
+- ✅ Good for **optional** dependencies
+- ✅ Can be changed at runtime
+
+**Disadvantages:**
+
+- ❌ Dependency might be null (must handle)
+- ❌ Not enforced at compile time
+- ❌ ASP.NET Core DI doesn't natively support property injection
+
+---
+
+#### 3️⃣ Method Injection
+
+Dependencies are provided through **method parameters**. Used when dependency is only needed for a **specific method**.
+
+```csharp
+public class DemoController : ControllerBase
+{
+    // ✅ Method Injection - Dependency passed to specific method
+    [HttpGet]
+    public ActionResult Index([FromServices] IMyLogger myLogger)
+    {
+        myLogger.Log("Index method called");
+        return Ok();
+    }
+
+    [HttpGet("other")]
+    public ActionResult Other()
+    {
+        // This method doesn't need IMyLogger
+        return Ok("No logging here");
+    }
+}
+```
+
+**Advantages:**
+
+- ✅ Dependency only injected **when needed**
+- ✅ Different methods can use **different services**
+- ✅ Good for **rarely used** dependencies
+
+**Disadvantages:**
+
+- ❌ Can make method signatures complex
+- ❌ Less clear dependencies at class level
+
+---
+
+#### 📊 Comparison: DI Injection Types
+
+| Aspect              | Constructor Injection | Property Injection | Method Injection  |
+| ------------------- | --------------------- | ------------------ | ----------------- |
+| **Preferred**       | ⭐ Yes (Most used)    | Sometimes          | Rarely            |
+| **Dependency**      | Required              | Optional           | Per-method        |
+| **Null Safety**     | ✅ Guaranteed         | ❌ May be null     | ✅ Guaranteed     |
+| **Visibility**      | All in constructor    | Scattered          | Per method        |
+| **Immutability**    | ✅ Yes                | ❌ No              | N/A               |
+| **ASP.NET Support** | ✅ Native             | ❌ Manual          | ✅ [FromServices] |
+| **Use Case**        | Most services         | Optional services  | Specific actions  |
+
+---
+
+#### 🎯 Which Type Should You Use?
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    DECISION GUIDE                               │
+│                                                                 │
+│  Is the dependency required for the class to work?             │
+│       │                                                         │
+│       ├── YES ──▶ Use Constructor Injection ⭐                  │
+│       │                                                         │
+│       └── NO ──▶ Is it needed for only one method?             │
+│                        │                                        │
+│                        ├── YES ──▶ Use Method Injection         │
+│                        │           [FromServices]               │
+│                        │                                        │
+│                        └── NO ──▶ Use Property Injection        │
+│                                   (Optional dependency)         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+> 💡 **Best Practice:** Use **Constructor Injection** for 95% of cases. It's the cleanest, safest, and most testable approach!
+
+---
+
+### �📊 DI Lifetime Types (Scopes)
+
+ASP.NET Core provides three service lifetimes:
+
+| Lifetime      | Method             | Description                         | Use Case                        |
+| ------------- | ------------------ | ----------------------------------- | ------------------------------- |
+| **Singleton** | `AddSingleton<>()` | One instance for entire application | Configuration, Caching          |
+| **Scoped**    | `AddScoped<>()`    | One instance per HTTP request       | Database Context, Logging       |
+| **Transient** | `AddTransient<>()` | New instance every time requested   | Lightweight, stateless services |
+
+```csharp
+// Singleton: Same instance throughout the app
+builder.Services.AddSingleton<IMyLogger, LogToFile>();
+
+// Scoped: New instance per HTTP request
+builder.Services.AddScoped<IMyLogger, LogToDB>();
+
+// Transient: New instance every time DI container is asked
+builder.Services.AddTransient<IMyLogger, LogToMemoryServer>();
+```
+
+---
+
+### 🎮 Example from This Project
+
+**Step 1: Create the Interface**
+
+```csharp
+// MyLogging/IMyLogger.cs
+namespace CollegeApp.MyLogging
+{
+    public interface IMyLogger
+    {
+        void Log(string message);
+    }
+}
+```
+
+**Step 2: Create Multiple Implementations**
+
+```csharp
+// MyLogging/LogToDB.cs
+namespace CollegeApp.MyLogging
+{
+    public class LogToDB : IMyLogger
+    {
+        public void Log(string message)
+        {
+            Console.WriteLine(message);
+            Console.WriteLine("LogToDB");
+        }
+    }
+}
+
+// MyLogging/LogToFile.cs
+namespace CollegeApp.MyLogging
+{
+    public class LogToFile : IMyLogger
+    {
+        public void Log(string message)
+        {
+            Console.WriteLine(message);
+            Console.WriteLine("LogToFile");
+        }
+    }
+}
+
+// MyLogging/LogToMemoryServer.cs
+namespace CollegeApp.MyLogging
+{
+    public class LogToMemoryServer : IMyLogger
+    {
+        public void Log(string message)
+        {
+            Console.WriteLine(message);
+            Console.WriteLine("LogToMemoryServer");
+        }
+    }
+}
+```
+
+**Step 3: Register in Program.cs (DI Container)**
+
+```csharp
+// Program.cs
+using CollegeApp.MyLogging;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers().AddNewtonsoftJson();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// ✅ Register DI - One place to change implementation!
+builder.Services.AddScoped<IMyLogger, LogToMemoryServer>();
+
+var app = builder.Build();
+```
+
+> 💡 **To switch logger**: Just change `LogToMemoryServer` to `LogToDB` or `LogToFile` in Program.cs. No controller changes needed!
+
+**Step 4: Inject in Controller (Loosely Coupled)**
+
+```csharp
+// Controllers/DemoController.cs
+using CollegeApp.MyLogging;
+using Microsoft.AspNetCore.Mvc;
+
+namespace CollegeApp.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class DemoController : ControllerBase
+    {
+        private readonly IMyLogger _myLogger;
+
+        // ✅ Loosely Coupled - Dependency is injected
+        public DemoController(IMyLogger myLogger)
+        {
+            _myLogger = myLogger;
+        }
+
+        [HttpGet]
+        public ActionResult Index()
+        {
+            _myLogger.Log("Index method started");
+            return Ok();
+        }
+    }
+}
+```
+
+---
+
+### 🔑 Tightly Coupled vs Loosely Coupled
+
+| Aspect                | Tightly Coupled ❌            | Loosely Coupled ✅             |
+| --------------------- | ----------------------------- | ------------------------------ |
+| **Instance Creation** | `new LogToDB()` in controller | DI Container provides instance |
+| **Change Logger**     | Modify ALL controllers        | Change ONE line in Program.cs  |
+| **Testing**           | Hard to mock                  | Easy to inject mocks           |
+| **Code Location**     | Scattered across controllers  | Centralized in Program.cs      |
+| **Maintenance**       | Difficult                     | Easy                           |
+| **Flexibility**       | Low                           | High                           |
+
+---
+
+### 📐 How DI Works in ASP.NET Core
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    DI Container Flow                           │
+│                                                                 │
+│  1️⃣ Application Starts                                         │
+│      │                                                          │
+│      ▼                                                          │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Program.cs                                                │  │
+│  │  builder.Services.AddScoped<IMyLogger, LogToMemoryServer>()│  │
+│  └───────────────────────────┬──────────────────────────────┘  │
+│                              │                                  │
+│  2️⃣ HTTP Request Comes In    │                                  │
+│      │                        │                                  │
+│      ▼                        ▼                                  │
+│  ┌──────────────────┐  ┌─────────────────────────────┐  │
+│  │  DI Container    │  │  Looks for IMyLogger         │  │
+│  │  resolves        │──▶  Finds: LogToMemoryServer    │  │
+│  │  dependencies    │  │  Creates instance            │  │
+│  └────────┬─────────┘  └─────────────┬───────────────┘  │
+│           │                          │                          │
+│  3️⃣ Injects into Controller         │                          │
+│           │                          │                          │
+│           ▼                          ▼                          │
+│  ┌──────────────────────────────────────────────┐             │
+│  │  DemoController(IMyLogger myLogger)              │             │
+│  │  {                                               │             │
+│  │      _myLogger = myLogger; // Injected!          │             │
+│  │  }                                               │             │
+│  └──────────────────────────────────────────────┘             │
+│                                                                 │
+│  4️⃣ Controller uses the injected service                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 📁 Project Structure with DI
+
+```
+CollegeApp/
+├── Controllers/
+│   ├── DemoController.cs       ◀── Injects IMyLogger
+│   └── StudentController.cs    ◀── Can also inject IMyLogger
+├── MyLogging/
+│   ├── IMyLogger.cs            ◀── Interface (Contract)
+│   ├── LogToDB.cs              ◀── Implementation 1
+│   ├── LogToFile.cs            ◀── Implementation 2
+│   └── LogToMemoryServer.cs    ◀── Implementation 3 (Currently used)
+└── Program.cs                  ◀── DI Registration (Central location)
+```
+
+---
+
+### 💡 Real-World Benefit
+
+**Scenario:** You want to switch from logging to MemoryServer to logging to Database.
+
+**❌ Without DI (Tightly Coupled):**
+
+```csharp
+// Must change EVERY controller file!
+// DemoController.cs
+_myLogger = new LogToDB();  // Was: new LogToMemoryServer()
+
+// StudentController.cs
+_myLogger = new LogToDB();  // Was: new LogToMemoryServer()
+
+// ... and ALL other controllers
+```
+
+**✅ With DI (Loosely Coupled):**
+
+```csharp
+// Change ONLY Program.cs - ONE line!
+builder.Services.AddScoped<IMyLogger, LogToDB>();  // Was: LogToMemoryServer
+
+// ✅ All controllers automatically use the new implementation!
+// ✅ No controller code changes needed!
+```
+
+---
+
+### 🎯 Best Practices for DI
+
+1. **Program interfaces, not implementations** – Depend on `IMyLogger`, not `LogToDB`
+2. **Use constructor injection** – Preferred way to inject dependencies
+3. **Choose correct lifetime** – Scoped for request-based, Singleton for app-wide
+4. **Keep services focused** – Each service should do one thing well
+5. **Register at startup** – All registrations in Program.cs before `Build()`
+6. **Avoid Service Locator pattern** – Let DI container do the work
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
 ## 🎉 Conclusion
 
 You've learned:
@@ -1763,6 +2295,7 @@ You've learned:
 - ✅ Model validation to prevent invalid data
 - ✅ Built-in validation attributes (`[Required]`, `[EmailAddress]`, `[Range]`, etc.)
 - ✅ Creating custom validation attributes for business rules
+- ✅ Dependency Injection for loose coupling and maintainability
 
 **Happy Coding!** 🚀
 
