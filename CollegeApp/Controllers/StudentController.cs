@@ -8,11 +8,19 @@ namespace CollegeApp.Controllers
     [ApiController]
     public class StudentController : ControllerBase
     {
+        private readonly ILogger<StudentController> _logger;
+
+        public StudentController(ILogger<StudentController> logger)
+        {
+            _logger = logger;
+        }
+
         [HttpGet]
         [Route("All", Name = "GetAllStudents")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         public ActionResult<IEnumerable<StudentDTO>> GetStudents()
         {
+            _logger.LogInformation("Get all the student.");
             //using LINQ query
             var students = CollegeRepository.Students.Select(s => new StudentDTO()
             {
@@ -81,7 +89,7 @@ namespace CollegeApp.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult UpdateStudentPartial(int id,[FromBody] JsonPatchDocument<StudentDTO> patchDocument)
+        public ActionResult UpdateStudentPartial(int id, [FromBody] JsonPatchDocument<StudentDTO> patchDocument)
         {
             if (patchDocument == null || id <= 0)
                 return BadRequest();
@@ -120,10 +128,14 @@ namespace CollegeApp.Controllers
         public ActionResult<StudentDTO> GetStudentById(int id)
         {
             if (id <= 0)
+            {
+                _logger.LogWarning("give a valid Id!");
                 return BadRequest();
+            }
 
             var student = CollegeRepository.Students.Where(s => s.Id == id).FirstOrDefault();
             if (student == null)
+                _logger.LogError("given id student not found!");
                 return NotFound($"The student with id {id} not found!.");
 
             //create a studentDTO here.

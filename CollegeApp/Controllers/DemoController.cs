@@ -8,7 +8,7 @@ namespace CollegeApp.Controllers
     [ApiController]
     public class DemoController : ControllerBase
     {
-        private readonly IMyLogger _myLogger;
+        private readonly ILogger<DemoController> _logger;
         //1. strongly coupled/ tightly coupled
         //public DemoController()
         //{
@@ -16,15 +16,21 @@ namespace CollegeApp.Controllers
         //}
 
         //2. loosely coupled
-        public DemoController(IMyLogger myLogger)
+        public DemoController(ILogger<DemoController> logger)
         {
-            _myLogger = myLogger;
+            _logger = logger;
         }
 
         [HttpGet]
         public ActionResult Index()
         {
-            _myLogger.Log("Index method started");
+            _logger.LogTrace("Log message from trace method");
+            _logger.LogDebug("Log message from Debug method");
+            _logger.LogInformation("Log message from Information method");
+            _logger.LogWarning("Log message from Warning method");
+            _logger.LogError("Log message from Error method");
+            _logger.LogCritical("Log message from Critical method");
+       
             return Ok();
         }
 

@@ -22,6 +22,7 @@ A comprehensive guide to understanding Web APIs, their evolution, and practical 
 14. [Built-in Validation Attributes](#14-built-in-validation-attributes)
 15. [Custom Validation Attributes](#15-custom-validation-attributes)
 16. [Dependency Injection in Web API](#16-dependency-injection-in-web-api)
+17. [Built-in Logger in Web API](#17-built-in-logger-in-web-api)
 
 ---
 
@@ -2276,7 +2277,159 @@ builder.Services.AddScoped<IMyLogger, LogToDB>();  // Was: LogToMemoryServer
 
 ---
 
-## 🎉 Conclusion
+## 17. Built-in Logger in Web API
+
+### 🤔 What is Built-in Logger?
+
+ASP.NET Core provides a **built-in logging framework** through the `ILogger<T>` interface. It's automatically available via Dependency Injection – no extra packages needed!
+
+---
+
+### 📊 Log Levels in Web API
+
+ASP.NET Core uses **7 log levels** to categorize messages by severity:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    LOG LEVELS HIERARCHY                        │
+│                                                                 │
+│  Level 0  ┌────────────┐  Most detailed, verbose output           │
+│  TRACE    │   Trace    │  ◀ Development debugging                │
+│          └────────────┘                                          │
+│              │                                                   │
+│  Level 1  ┌────────────┐  Debugging information                   │
+│  DEBUG    │   Debug    │  ◀ Development only                     │
+│          └────────────┘                                          │
+│              │                                                   │
+│  Level 2  ┌────────────┐  General flow information                │
+│  INFO     │Information │  ◀ Production friendly                  │
+│          └────────────┘                                          │
+│              │                                                   │
+│  Level 3  ┌────────────┐  Unexpected but handled issues           │
+│  WARNING  │  Warning   │  ◀ Something to watch                   │
+│          └────────────┘                                          │
+│              │                                                   │
+│  Level 4  ┌────────────┐  Error occurred, operation failed        │
+│  ERROR    │   Error    │  ◀ Needs attention                      │
+│          └────────────┘                                          │
+│              │                                                   │
+│  Level 5  ┌────────────┐  System crash, requires immediate fix     │
+│ CRITICAL  │  Critical  │  ◀ Highest priority                     │
+│          └────────────┘                                          │
+│              │                                                   │
+│  Level 6  ┌────────────┐  Logging disabled                        │
+│  NONE     │   None     │  ◀ No logs at all                       │
+│          └────────────┘                                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| Level           | Value | Method             | Usage                                         |
+| --------------- | ----- | ------------------ | --------------------------------------------- |
+| **Trace**       | 0     | `LogTrace()`       | Most detailed logs, debugging internals       |
+| **Debug**       | 1     | `LogDebug()`       | Development debugging information             |
+| **Information** | 2     | `LogInformation()` | General application flow                      |
+| **Warning**     | 3     | `LogWarning()`     | Unexpected events that don't stop execution   |
+| **Error**       | 4     | `LogError()`       | Errors that stop current operation            |
+| **Critical**    | 5     | `LogCritical()`    | System failures requiring immediate attention |
+| **None**        | 6     | N/A                | Disables logging completely                   |
+
+---
+
+### � Example from This Project
+
+**Using ILogger in Controller:**
+
+```csharp
+// Controllers/DemoController.cs
+using Microsoft.AspNetCore.Mvc;
+
+namespace CollegeApp.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class DemoController : ControllerBase
+    {
+        private readonly ILogger<DemoController> _logger;
+
+        // ✅ Built-in ILogger injected via constructor
+        public DemoController(ILogger<DemoController> logger)
+        {
+            _logger = logger;
+        }
+
+        [HttpGet]
+        public ActionResult Index()
+        {
+            _logger.LogTrace("Log message from Trace method");
+            _logger.LogDebug("Log message from Debug method");
+            _logger.LogInformation("Log message from Information method");
+            _logger.LogWarning("Log message from Warning method");
+            _logger.LogError("Log message from Error method");
+            _logger.LogCritical("Log message from Critical method");
+
+            return Ok();
+        }
+    }
+}
+```
+
+---
+
+### ⚙️ Configuring Log Levels in appsettings.json
+
+Configure which log levels to display for different providers:
+
+```json
+// appsettings.json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    },
+    "Console": {
+      "LogLevel": {
+        "Default": "Error",
+        "Microsoft.Hosting": "Trace"
+      }
+    },
+    "Debug": {
+      "LogLevel": {
+        "Default": "Trace",
+        "Microsoft.Hosting": "Error"
+      }
+    }
+  },
+  "AllowedHosts": "*"
+}
+```
+
+**Configuration Explained:**
+
+| Setting                             | Meaning                                            |
+| ----------------------------------- | -------------------------------------------------- |
+| `"Default": "Information"`          | Show Information+ for all categories               |
+| `"Microsoft.AspNetCore": "Warning"` | Show only Warning+ for ASP.NET Core framework logs |
+| `"Console": { ... }`                | Specific settings for console logging provider     |
+| `"Debug": { ... }`                  | Specific settings for debug output window          |
+
+> 💡 **Note:** Setting a level shows that level AND all levels above it. E.g., `"Warning"` shows Warning, Error, and Critical.
+
+---
+
+### 🔑 Key Points
+
+1. **Use `ILogger<T>`** – T is your class name (e.g., `ILogger<DemoController>`)
+2. **Inject via constructor** – ASP.NET Core DI provides it automatically
+3. **Choose appropriate level** – Don't use Error for informational messages
+4. **Configure per environment** – Use `appsettings.Development.json` for dev settings
+5. **Filter by category** – Control logs from specific namespaces
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
+## �🎉 Conclusion
 
 You've learned:
 
@@ -2296,6 +2449,7 @@ You've learned:
 - ✅ Built-in validation attributes (`[Required]`, `[EmailAddress]`, `[Range]`, etc.)
 - ✅ Creating custom validation attributes for business rules
 - ✅ Dependency Injection for loose coupling and maintainability
+- ✅ Built-in logger and log levels in Web API
 
 **Happy Coding!** 🚀
 
