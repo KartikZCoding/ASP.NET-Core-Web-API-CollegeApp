@@ -13,5 +13,6 @@ namespace ASPNETCoreWebAPI.Model
         public string Email { get; set; }
         [Required]
         public string Address { get; set; }
+        public DateTime DOB { get; set; }
     }
 }

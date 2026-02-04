@@ -1,4 +1,5 @@
-﻿using ASPNETCoreWebAPI.Model;
+﻿using ASPNETCoreWebAPI.Data;
+using ASPNETCoreWebAPI.Model;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,11 +9,15 @@ namespace ASPNETCoreWebAPI.Controllers
     [ApiController]
     public class StudentController : ControllerBase
     {
+        // dbcontext added
+        private readonly CollegeDBContext _dbContext;
+
         private readonly ILogger<StudentController> _logger;
 
-        public StudentController(ILogger<StudentController> logger)
+        public StudentController(ILogger<StudentController> logger, CollegeDBContext collegeDBContext)
         {
             _logger = logger;
+            _dbContext = collegeDBContext;
         }
 
         [HttpGet]
@@ -22,15 +27,77 @@ namespace ASPNETCoreWebAPI.Controllers
         {
             _logger.LogInformation("Get all the student.");
             //using LINQ query
-            var students = CollegeRepository.Students.Select(s => new StudentDTO()
+            var students = _dbContext.Students.Select(s => new StudentDTO()
             {
                 Id = s.Id,
                 StudentName = s.StudentName,
                 Email = s.Email,
-                Address = s.Address
+                Address = s.Address,
+                DOB = s.DOB
             });
 
             return Ok(students);
+        }
+
+        [HttpGet]
+        [Route("{id:int}", Name = "GetStudentById")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public ActionResult<StudentDTO> GetStudentById(int id)
+        {
+            if (id <= 0)
+            {
+                _logger.LogWarning("give a valid Id!");
+                return BadRequest();
+            }
+
+            var student = _dbContext.Students.Where(s => s.Id == id).FirstOrDefault();
+            if (student == null)
+            {
+                _logger.LogError("given id student not found!");
+                return NotFound($"The student with id {id} not found!.");
+            }
+
+            //create a studentDTO here.
+            var studentDTO = new StudentDTO
+            {
+                Id = student.Id,
+                StudentName = student.StudentName,
+                Email = student.Email,
+                Address = student.Address,
+                DOB = student.DOB
+            };
+
+            return Ok(studentDTO);
+        }
+
+        [HttpGet("{name:alpha}", Name = "GetStudentByName")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public ActionResult<StudentDTO> GetStudentByName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return BadRequest();
+
+            var student = _dbContext.Students.Where(s => s.StudentName == name).FirstOrDefault();
+            if (student == null)
+                return NotFound($"The student with name {name} not found!.");
+
+            //create a studentDTO here.
+            var studentDTO = new StudentDTO
+            {
+                Id = student.Id,
+                StudentName = student.StudentName,
+                Email = student.Email,
+                Address = student.Address,
+                DOB = student.DOB
+            };
+
+            return Ok(studentDTO);
         }
 
         [HttpPost]
@@ -43,17 +110,16 @@ namespace ASPNETCoreWebAPI.Controllers
             if (model == null)
                 return BadRequest();
 
-            int newId = CollegeRepository.Students.LastOrDefault().Id + 1;
-
             Student student = new Student
             {
-                Id = newId,
                 StudentName = model.StudentName,
                 Email = model.Email,
-                Address = model.Address
+                Address = model.Address,
+                DOB = model.DOB
             };
 
-            CollegeRepository.Students.Add(student);
+            _dbContext.Students.Add(student);
+            _dbContext.SaveChanges();
 
             model.Id = student.Id;
 
@@ -71,7 +137,7 @@ namespace ASPNETCoreWebAPI.Controllers
             if (model == null || model.Id <= 0)
                 return BadRequest();
 
-            var existingStudent = CollegeRepository.Students.Where(s => s.Id == model.Id).FirstOrDefault();
+            var existingStudent = _dbContext.Students.Where(s => s.Id == model.Id).FirstOrDefault();
 
             if (existingStudent == null)
                 return NotFound();
@@ -79,6 +145,9 @@ namespace ASPNETCoreWebAPI.Controllers
             existingStudent.StudentName = model.StudentName;
             existingStudent.Email = model.Email;
             existingStudent.Address = model.Address;
+            existingStudent.DOB = model.DOB;
+
+            _dbContext.SaveChanges();
 
             return NoContent();
         }
@@ -94,7 +163,7 @@ namespace ASPNETCoreWebAPI.Controllers
             if (patchDocument == null || id <= 0)
                 return BadRequest();
 
-            var existingStudent = CollegeRepository.Students.Where(s => s.Id == id).FirstOrDefault();
+            var existingStudent = _dbContext.Students.Where(s => s.Id == id).FirstOrDefault();
 
             if (existingStudent == null)
                 return NotFound();
@@ -105,6 +174,7 @@ namespace ASPNETCoreWebAPI.Controllers
                 StudentName = existingStudent.StudentName,
                 Email = existingStudent.Email,
                 Address = existingStudent.Address,
+                DOB = existingStudent.DOB
             };
 
             patchDocument.ApplyTo(studentDTO, ModelState);
@@ -115,67 +185,11 @@ namespace ASPNETCoreWebAPI.Controllers
             existingStudent.StudentName = studentDTO.StudentName;
             existingStudent.Email = studentDTO.Email;
             existingStudent.Address = studentDTO.Address;
+            existingStudent.DOB = studentDTO.DOB;
+
+            _dbContext.SaveChanges();
 
             return NoContent();
-        }
-
-        [HttpGet]
-        [Route("{id:int}", Name = "GetStudentById")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<StudentDTO> GetStudentById(int id)
-        {
-            if (id <= 0)
-            {
-                _logger.LogWarning("give a valid Id!");
-                return BadRequest();
-            }
-
-            var student = CollegeRepository.Students.Where(s => s.Id == id).FirstOrDefault();
-            if (student == null)
-            {
-                _logger.LogError("given id student not found!");
-                return NotFound($"The student with id {id} not found!.");
-            }
-
-            //create a studentDTO here.
-            var studentDTO = new StudentDTO
-            {
-                Id = student.Id,
-                StudentName = student.StudentName,
-                Email = student.Email,
-                Address = student.Address
-            };
-
-            return Ok(studentDTO);
-        }
-
-        [HttpGet("{name:alpha}", Name = "GetStudentByName")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<StudentDTO> GetStudentByName(string name)
-        {
-            if (string.IsNullOrEmpty(name))
-                return BadRequest();
-
-            var student = CollegeRepository.Students.Where(s => s.StudentName == name).FirstOrDefault();
-            if (student == null)
-                return NotFound($"The student with name {name} not found!.");
-
-            //create a studentDTO here.
-            var studentDTO = new StudentDTO
-            {
-                Id = student.Id,
-                StudentName = student.StudentName,
-                Email = student.Email,
-                Address = student.Address
-            };
-
-            return Ok(studentDTO);
         }
 
         [HttpDelete("{id}", Name = "DeleteStudentById")]
@@ -188,11 +202,12 @@ namespace ASPNETCoreWebAPI.Controllers
             if (id <= 0)
                 return BadRequest();
 
-            var student = CollegeRepository.Students.Where(s => s.Id == id).FirstOrDefault();
+            var student = _dbContext.Students.Where(s => s.Id == id).FirstOrDefault();
             if (student == null)
                 return NotFound($"The student with id {id} not found!.");
 
-            CollegeRepository.Students.Remove(student);
+            _dbContext.Students.Remove(student);
+            _dbContext.SaveChanges();
 
             return Ok(true);
         }

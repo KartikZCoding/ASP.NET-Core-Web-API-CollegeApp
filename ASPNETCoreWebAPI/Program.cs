@@ -1,5 +1,8 @@
+using ASPNETCoreWebAPI.Data;
 using ASPNETCoreWebAPI.MyLogging;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +25,12 @@ Log.Logger = new LoggerConfiguration()
 
 //use serilog along with built-in logger
 builder.Logging.AddSerilog();
+
+builder.Services.AddDbContext<CollegeDBContext>(options =>
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("CollegeAppDBConnection"));
+});
+
 
 var app = builder.Build();
 

@@ -24,6 +24,7 @@ A comprehensive guide to understanding Web APIs, their evolution, and practical 
 16. [Dependency Injection in Web API](#16-dependency-injection-in-web-api)
 17. [Built-in Logger in Web API](#17-built-in-logger-in-web-api)
 18. [Serilog – Advanced Logging](#18-serilog--advanced-logging)
+19. [Entity Framework Core](#19-entity-framework-core)
 
 ---
 
@@ -2486,6 +2487,472 @@ builder.Logging.AddSerilog();
 
 ---
 
+## 19. Entity Framework Core
+
+### 🤔 What is Entity Framework Core?
+
+**Entity Framework Core (EF Core)** is an **ORM (Object-Relational Mapper)** for .NET. It lets you work with databases using C# objects instead of writing raw SQL queries.
+
+---
+
+### 📚 What is ORM (Object-Relational Mapping)?
+
+**ORM** is a technique that connects your C# code to a database. Instead of writing SQL queries manually, you work with C# classes and objects.
+
+**Without ORM (Traditional Way):**
+
+```csharp
+// You write raw SQL queries
+string sql = "SELECT * FROM Students WHERE Id = 1";
+SqlCommand cmd = new SqlCommand(sql, connection);
+// Then manually convert results to C# objects... 😓
+```
+
+**With ORM (EF Core Way):**
+
+```csharp
+// You write C# code, EF Core handles SQL for you!
+var student = _dbContext.Students.Where(s => s.Id == 1).FirstOrDefault();
+// EF Core automatically converts database rows to C# objects! 😊
+```
+
+---
+
+### ❓ Why Use Entity Framework Core?
+
+| Problem Without EF Core               | Solution With EF Core                  |
+| ------------------------------------- | -------------------------------------- |
+| Write manual SQL queries              | Use LINQ (C# code) instead             |
+| Manually map database rows to objects | Automatic mapping to C# objects        |
+| Database changes require code updates | Migrations handle schema changes       |
+| Hard to switch databases              | Just change the provider (SQL → MySQL) |
+| SQL injection risks                   | Parameterized queries by default       |
+
+**Benefits:**
+
+- ✅ **No SQL knowledge required** – Write C# code, EF Core generates SQL
+- ✅ **Type-safe queries** – Compile-time error checking
+- ✅ **Faster development** – Less boilerplate code
+- ✅ **Easy maintenance** – Changes in one place (C# model)
+- ✅ **Cross-database support** – SQL Server, MySQL, PostgreSQL, SQLite
+
+---
+
+### 🔄 How EF Core Works
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         EF CORE WORKFLOW                                │
+│                                                                         │
+│   Your App          EF Core              Database                       │
+│   ────────          ───────              ────────                       │
+│                                                                         │
+│   LINQ Query   ──►  Translates to   ──►  SQL Query                     │
+│   (C# Code)         SQL                  Executes                       │
+│                                                                         │
+│   C# Objects   ◄──  Converts to     ◄──  Result Data                   │
+│   (Student)         Objects              (Rows)                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Example:**
+
+```csharp
+// You write LINQ (C# code)
+var students = _dbContext.Students.Where(s => s.Id == 1).FirstOrDefault();
+
+// EF Core translates to SQL
+// SELECT * FROM Students WHERE Id = 1
+```
+
+---
+
+### 📊 Two Approaches in EF Core
+
+| Approach          | Description                               | When to Use                |
+| ----------------- | ----------------------------------------- | -------------------------- |
+| **Code First** ⭐ | Create C# classes → EF generates database | New projects, full control |
+| **DB First**      | Create database → EF generates C# classes | Existing databases         |
+
+---
+
+### 🏗️ Code First Approach (Used in This Project)
+
+**Code First** means you write C# code first, and EF Core creates the database for you.
+
+**Think of it like this:**
+
+- You design your house (C# classes) on paper first
+- Then the builder (EF Core) constructs the actual house (database)
+
+**Step-by-Step Process:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  CODE FIRST WORKFLOW                                                    │
+│                                                                         │
+│  Step 1: Create Entity Model (C# Class)                                 │
+│          └── Student.cs (defines table structure)                       │
+│                                                                         │
+│  Step 2: Create DbContext                                               │
+│          └── CollegeDBContext.cs (database session manager)             │
+│                                                                         │
+│  Step 3: Configure Connection String                                    │
+│          └── appsettings.json (where is your database?)                 │
+│                                                                         │
+│  Step 4: Register DbContext                                             │
+│          └── Program.cs (tell ASP.NET Core about your context)          │
+│                                                                         │
+│  Step 5: Create Migration                                               │
+│          └── Add-Migration InitialSetup (creates migration files)       │
+│                                                                         │
+│  Step 6: Update Database                                                │
+│          └── Update-Database (creates actual tables in SQL Server)      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Why Code First?**
+
+- ✅ Full control over your database design
+- ✅ Version control for database changes (migrations)
+- ✅ Easy to modify – change C# class, run migration
+- ✅ No need to manually create tables in SQL Server
+- ✅ Perfect for new projects
+
+---
+
+### 🔄 DB First Approach (Alternative)
+
+**DB First** means the database already exists, and EF Core generates C# classes from it.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  DB FIRST WORKFLOW                                                      │
+│                                                                         │
+│  Step 1: Design Database in SQL Server                                  │
+│          └── Create tables, relationships manually                      │
+│                                                                         │
+│  Step 2: Scaffold (Generate C# code from DB)                            │
+│          └── dotnet ef dbcontext scaffold "ConnectionString" Provider   │
+│                                                                         │
+│  Step 3: Use Generated Classes                                          │
+│          └── EF creates DbContext and entity models for you             │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**When to use DB First?**
+
+- ✅ Working with an existing database
+- ✅ Database designed by a DBA team
+- ✅ Legacy systems migration
+
+---
+
+### 📦 Required NuGet Packages
+
+```bash
+dotnet add package Microsoft.EntityFrameworkCore.SqlServer
+dotnet add package Microsoft.EntityFrameworkCore.Tools
+```
+
+---
+
+### 🔗 Connection String
+
+Add connection string in `appsettings.json`:
+
+```json
+{
+  "ConnectionStrings": {
+    "CollegeAppDBConnection": "Data Source=localhost; Initial Catalog=CollegeAppDB; Integrated Security=True; Trust Server Certificate=True"
+  }
+}
+```
+
+| Part                       | Meaning                           |
+| -------------------------- | --------------------------------- |
+| `Data Source`              | Server name (localhost for local) |
+| `Initial Catalog`          | Database name                     |
+| `Integrated Security=True` | Use Windows authentication        |
+| `Trust Server Certificate` | Trust the SSL certificate         |
+
+---
+
+### 🏗️ EF Core Structure
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  EF CORE STRUCTURE                                                      │
+│                                                                         │
+│  Each database needs its own DbContext:                                 │
+│                                                                         │
+│  ┌──────────────────────┐          ┌──────────────────────┐            │
+│  │   CollegeDBContext   │  ◄────►  │    CollegeAppDB      │            │
+│  │   ─────────────────  │          │    (SQL Server)      │            │
+│  │  DbSet<Student>      │  ◄────►  │    Students Table    │            │
+│  │  DbSet<Course>       │  ◄────►  │    Courses Table     │            │
+│  └──────────────────────┘          └──────────────────────┘            │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 📝 Step 1: Create Entity Model
+
+```csharp
+// Data/Student.cs
+namespace ASPNETCoreWebAPI.Data
+{
+    public class Student
+    {
+        public int Id { get; set; }
+        public string StudentName { get; set; }
+        public string Email { get; set; }
+        public string Address { get; set; }
+        public DateTime DOB { get; set; }
+    }
+}
+```
+
+---
+
+### 📝 Step 2: Create DbContext
+
+```csharp
+// Data/CollegeDBContext.cs
+using Microsoft.EntityFrameworkCore;
+
+namespace ASPNETCoreWebAPI.Data
+{
+    public class CollegeDBContext : DbContext
+    {
+        public CollegeDBContext(DbContextOptions<CollegeDBContext> options) : base(options)
+        {
+        }
+
+        // Each DbSet = One Table in Database
+        public DbSet<Student> Students { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            // Apply entity configurations
+            modelBuilder.ApplyConfiguration(new StudentConfig());
+        }
+    }
+}
+```
+
+---
+
+### 📝 Step 3: Create Entity Configuration (Optional but Recommended)
+
+Separate configuration keeps DbContext clean:
+
+```csharp
+// Data/Config/StudentConfig.cs
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace ASPNETCoreWebAPI.Data.Config
+{
+    public class StudentConfig : IEntityTypeConfiguration<Student>
+    {
+        public void Configure(EntityTypeBuilder<Student> builder)
+        {
+            // Table name
+            builder.ToTable("Students");
+
+            // Primary key
+            builder.HasKey(t => t.Id);
+
+            // Auto-increment
+            builder.Property(x => x.Id).UseIdentityColumn();
+
+            // Column constraints
+            builder.Property(n => n.StudentName).IsRequired().HasMaxLength(250);
+            builder.Property(n => n.Address).IsRequired(false).HasMaxLength(500);
+            builder.Property(n => n.Email).IsRequired().HasMaxLength(250);
+
+            // Seed default data
+            builder.HasData(new List<Student>()
+            {
+                new Student
+                {
+                    Id = 1,
+                    StudentName = "Kartik",
+                    Email = "Kartik123@gmail.com",
+                    Address = "Hyd, India",
+                    DOB = new DateTime(2005, 08, 03)
+                },
+                new Student
+                {
+                    Id = 2,
+                    StudentName = "Aryan",
+                    Email = "Aryan123@gmail.com",
+                    Address = "Banglore, India",
+                    DOB = new DateTime(2004, 09, 03)
+                }
+            });
+        }
+    }
+}
+```
+
+---
+
+### 📝 Step 4: Register DbContext in Program.cs
+
+```csharp
+// Program.cs
+using Microsoft.EntityFrameworkCore;
+
+builder.Services.AddDbContext<CollegeDBContext>(options =>
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("CollegeAppDBConnection"));
+});
+```
+
+---
+
+### 🔄 What is Migration?
+
+**Migration** is a way to update your database schema when your C# models change. Think of it as version control for your database!
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  MIGRATION WORKFLOW                                                     │
+│                                                                         │
+│  1. Change C# Model    ──►  Add new property to Student.cs              │
+│  2. Add Migration      ──►  Creates migration file with changes         │
+│  3. Update Database    ──►  Applies changes to actual database          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### ⚡ Migration Commands
+
+Run these in **Package Manager Console** (Visual Studio) or **Terminal**:
+
+| Command                                | Description                            |
+| -------------------------------------- | -------------------------------------- |
+| `Add-Migration InitialDBSetup`         | Create first migration                 |
+| `Add-Migration AddDataToStudentsTable` | Create migration with seed data        |
+| `Update-Database`                      | Apply migrations to database           |
+| `Remove-Migration`                     | Remove last migration (if not applied) |
+
+**Example Workflow:**
+
+```bash
+# Step 1: Create initial migration
+Add-Migration InitialDBSetup
+
+# Step 2: Apply to database (creates tables)
+Update-Database
+
+# Step 3: Later, add seed data
+Add-Migration AddDataToStudentsTable
+Update-Database
+
+# Step 4: Modify schema (add constraints)
+Add-Migration ModifyStudentsSchema
+Update-Database
+```
+
+---
+
+### 📁 Project Structure with EF Core
+
+```
+ASPNETCoreWebAPI/
+├── Controllers/
+│   └── StudentController.cs    ◀── Uses DbContext for CRUD
+├── Data/
+│   ├── CollegeDBContext.cs     ◀── Database context
+│   ├── Student.cs              ◀── Entity model
+│   └── Config/
+│       └── StudentConfig.cs    ◀── Entity configuration
+├── Migrations/
+│   ├── 20260204075146_InitialDBSetup.cs
+│   ├── 20260204083931_AddDataToStudentsTable.cs
+│   ├── 20260204085406_ModifyStudentsSchema.cs
+│   └── CollegeDBContextModelSnapshot.cs
+├── appsettings.json            ◀── Connection string
+└── Program.cs                  ◀── DbContext registration
+```
+
+---
+
+### 🎮 CRUD Operations with EF Core
+
+#### **Create (INSERT)**
+
+```csharp
+Student student = new Student
+{
+    StudentName = model.StudentName,
+    Email = model.Email,
+    Address = model.Address,
+    DOB = model.DOB
+};
+
+_dbContext.Students.Add(student);    // Add to DbSet
+_dbContext.SaveChanges();            // Execute INSERT
+```
+
+#### **Read (SELECT)**
+
+```csharp
+// Get all students
+var students = _dbContext.Students.ToList();
+
+// Get by ID
+var student = _dbContext.Students.Where(s => s.Id == id).FirstOrDefault();
+
+// Get by name
+var student = _dbContext.Students.Where(s => s.StudentName == name).FirstOrDefault();
+```
+
+#### **Update (UPDATE)**
+
+```csharp
+var existingStudent = _dbContext.Students.Where(s => s.Id == model.Id).FirstOrDefault();
+
+existingStudent.StudentName = model.StudentName;
+existingStudent.Email = model.Email;
+existingStudent.Address = model.Address;
+
+_dbContext.SaveChanges();    // Execute UPDATE
+```
+
+#### **Delete (DELETE)**
+
+```csharp
+var student = _dbContext.Students.Where(s => s.Id == id).FirstOrDefault();
+
+_dbContext.Students.Remove(student);    // Mark for deletion
+_dbContext.SaveChanges();               // Execute DELETE
+```
+
+---
+
+### 🔑 Key Points
+
+| Concept                  | Description                            |
+| ------------------------ | -------------------------------------- |
+| **DbContext**            | Represents a session with the database |
+| **DbSet<T>**             | Represents a table in the database     |
+| **SaveChanges()**        | Commits all changes to the database    |
+| **Migration**            | Version control for database schema    |
+| **Entity Configuration** | Define table schema using Fluent API   |
+| **HasData()**            | Seed default data into tables          |
+
+> 💡 **Tip:** Always call `SaveChanges()` after Add, Update, or Remove operations!
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
 ## 🎉 Conclusion
 
 You've learned:
@@ -2508,6 +2975,7 @@ You've learned:
 - ✅ Dependency Injection for loose coupling and maintainability
 - ✅ Built-in logger and log levels in Web API
 - ✅ Serilog for advanced structured logging with file output
+- ✅ Entity Framework Core for database operations with Code First approach
 
 **Happy Coding!** 🚀
 
