@@ -1,8 +1,8 @@
-﻿using CollegeApp.MyLogging;
+﻿using ASPNETCoreWebAPI.MyLogging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-namespace CollegeApp.Controllers
+namespace ASPNETCoreWebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
@@ -30,7 +30,7 @@ namespace CollegeApp.Controllers
             _logger.LogWarning("Log message from Warning method");
             _logger.LogError("Log message from Error method");
             _logger.LogCritical("Log message from Critical method");
-       
+
             return Ok();
         }
 

@@ -1,8 +1,8 @@
-﻿using CollegeApp.Validators;
+﻿using ASPNETCoreWebAPI.Validators;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using System.ComponentModel.DataAnnotations;
 
-namespace CollegeApp.Model
+namespace ASPNETCoreWebAPI.Model
 {
     public class StudentDTO
     {

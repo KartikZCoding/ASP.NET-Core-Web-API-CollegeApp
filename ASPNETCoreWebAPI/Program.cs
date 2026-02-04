@@ -1,4 +1,4 @@
-using CollegeApp.MyLogging;
+using ASPNETCoreWebAPI.MyLogging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,7 +12,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IMyLogger, LogToMemoryServer>();
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
-builder.Logging.AddDebug();     
+builder.Logging.AddDebug();
 
 var app = builder.Build();
 

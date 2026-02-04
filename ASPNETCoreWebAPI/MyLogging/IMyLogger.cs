@@ -1,4 +1,4 @@
-﻿namespace CollegeApp.MyLogging
+﻿namespace ASPNETCoreWebAPI.MyLogging
 {
     public interface IMyLogger
     {

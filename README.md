@@ -354,7 +354,7 @@ CollegeApp/
 ### 📦 Student Model
 
 ```csharp
-namespace CollegeApp.Model
+namespace ASPNETCoreWebAPI.Model
 {
     public class Student
     {
@@ -371,7 +371,7 @@ namespace CollegeApp.Model
 ### 💾 College Repository (Data Layer)
 
 ```csharp
-namespace CollegeApp.Model
+namespace ASPNETCoreWebAPI.Model
 {
     public static class CollegeRepository
     {
@@ -401,10 +401,10 @@ namespace CollegeApp.Model
 ### 🎮 Student Controller (API Endpoints)
 
 ```csharp
-using CollegeApp.Model;
+using ASPNETCoreWebAPI.Model;
 using Microsoft.AspNetCore.Mvc;
 
-namespace CollegeApp.Controllers
+namespace ASPNETCoreWebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
@@ -626,7 +626,7 @@ CollegeApp/
 ### 📦 StudentDTO Model
 
 ```csharp
-namespace CollegeApp.Model
+namespace ASPNETCoreWebAPI.Model
 {
     public class StudentDTO
     {
@@ -643,10 +643,10 @@ namespace CollegeApp.Model
 ### � Updated Student Controller (Using DTOs)
 
 ```csharp
-using CollegeApp.Model;
+using ASPNETCoreWebAPI.Model;
 using Microsoft.AspNetCore.Mvc;
 
-namespace CollegeApp.Controllers
+namespace ASPNETCoreWebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
@@ -1471,7 +1471,7 @@ ASP.NET Core provides many **built-in validation attributes** that you can apply
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using System.ComponentModel.DataAnnotations;
 
-namespace CollegeApp.Model
+namespace ASPNETCoreWebAPI.Model
 {
     public class StudentDTO
     {
@@ -1610,7 +1610,7 @@ Sometimes you need validation logic that built-in attributes don't provide:
 ```csharp
 using System.ComponentModel.DataAnnotations;
 
-namespace CollegeApp.Validators
+namespace ASPNETCoreWebAPI.Validators
 {
     public class DateCheckAttribute : ValidationAttribute
     {
@@ -1632,9 +1632,9 @@ namespace CollegeApp.Validators
 **Model/StudentDTO.cs – Using the Custom Attribute:**
 
 ```csharp
-using CollegeApp.Validators;  // ◀── Import custom validators
+using ASPNETCoreWebAPI.Validators;  // ◀── Import custom validators
 
-namespace CollegeApp.Model
+namespace ASPNETCoreWebAPI.Model
 {
     public class StudentDTO
     {
@@ -2061,7 +2061,7 @@ builder.Services.AddTransient<IMyLogger, LogToMemoryServer>();
 
 ```csharp
 // MyLogging/IMyLogger.cs
-namespace CollegeApp.MyLogging
+namespace ASPNETCoreWebAPI.MyLogging
 {
     public interface IMyLogger
     {
@@ -2074,7 +2074,7 @@ namespace CollegeApp.MyLogging
 
 ```csharp
 // MyLogging/LogToDB.cs
-namespace CollegeApp.MyLogging
+namespace ASPNETCoreWebAPI.MyLogging
 {
     public class LogToDB : IMyLogger
     {
@@ -2087,7 +2087,7 @@ namespace CollegeApp.MyLogging
 }
 
 // MyLogging/LogToFile.cs
-namespace CollegeApp.MyLogging
+namespace ASPNETCoreWebAPI.MyLogging
 {
     public class LogToFile : IMyLogger
     {
@@ -2100,7 +2100,7 @@ namespace CollegeApp.MyLogging
 }
 
 // MyLogging/LogToMemoryServer.cs
-namespace CollegeApp.MyLogging
+namespace ASPNETCoreWebAPI.MyLogging
 {
     public class LogToMemoryServer : IMyLogger
     {
@@ -2117,7 +2117,7 @@ namespace CollegeApp.MyLogging
 
 ```csharp
 // Program.cs
-using CollegeApp.MyLogging;
+using ASPNETCoreWebAPI.MyLogging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -2137,10 +2137,10 @@ var app = builder.Build();
 
 ```csharp
 // Controllers/DemoController.cs
-using CollegeApp.MyLogging;
+using ASPNETCoreWebAPI.MyLogging;
 using Microsoft.AspNetCore.Mvc;
 
-namespace CollegeApp.Controllers
+namespace ASPNETCoreWebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
@@ -2343,7 +2343,7 @@ ASP.NET Core uses **7 log levels** to categorize messages by severity:
 // Controllers/DemoController.cs
 using Microsoft.AspNetCore.Mvc;
 
-namespace CollegeApp.Controllers
+namespace ASPNETCoreWebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]

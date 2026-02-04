@@ -1,4 +1,4 @@
-﻿namespace CollegeApp.Model
+﻿namespace ASPNETCoreWebAPI.Model
 {
     public class Student
     {

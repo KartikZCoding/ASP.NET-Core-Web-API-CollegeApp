@@ -1,8 +1,8 @@
-﻿using CollegeApp.Model;
+﻿using ASPNETCoreWebAPI.Model;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 
-namespace CollegeApp.Controllers
+namespace ASPNETCoreWebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
@@ -135,8 +135,10 @@ namespace CollegeApp.Controllers
 
             var student = CollegeRepository.Students.Where(s => s.Id == id).FirstOrDefault();
             if (student == null)
+            {
                 _logger.LogError("given id student not found!");
                 return NotFound($"The student with id {id} not found!.");
+            }
 
             //create a studentDTO here.
             var studentDTO = new StudentDTO
