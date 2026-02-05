@@ -13,7 +13,9 @@ namespace ASPNETCoreWebAPI.Controllers
     [ApiController]
     public class StudentController : ControllerBase
     {
-        //repository
+        //common repository
+        //private readonly ICollegeRepository<Student> _studentRepository;
+        //table specific repository
         private readonly IStudentRepository _studentRepository;
 
         //automapper
@@ -21,6 +23,9 @@ namespace ASPNETCoreWebAPI.Controllers
 
         private readonly ILogger<StudentController> _logger;
 
+        //common repository
+        //public StudentController(ILogger<StudentController> logger, IMapper mapper, ICollegeRepository<Student> studentRepository)
+        //table specific repository
         public StudentController(ILogger<StudentController> logger, IMapper mapper, IStudentRepository studentRepository)
         {
             _logger = logger;
@@ -57,7 +62,7 @@ namespace ASPNETCoreWebAPI.Controllers
                 return BadRequest();
             }
 
-            var student = await _studentRepository.GetByIdAsync(id);
+            var student = await _studentRepository.GetAsync(student => student.Id == id);
             if (student == null)
             {
                 _logger.LogError("given id student not found!");
@@ -80,7 +85,7 @@ namespace ASPNETCoreWebAPI.Controllers
             if (string.IsNullOrEmpty(name))
                 return BadRequest();
 
-            var student = await _studentRepository.GetByNameAsync(name);
+            var student = await _studentRepository.GetAsync(student => student.StudentName.ToLower().Contains(name.ToLower()));
             if (student == null)
                 return NotFound($"The student with name {name} not found!.");
 
@@ -102,9 +107,9 @@ namespace ASPNETCoreWebAPI.Controllers
 
             Student student = _mapper.Map<Student>(dto);
 
-            var id = await _studentRepository.CreateAsync(student);
+            var studentAfterCreate = await _studentRepository.CreateAsync(student);
 
-            dto.Id = id;
+            dto.Id = studentAfterCreate.Id;
 
             return CreatedAtRoute("GetStudentById", new { id = dto.Id }, dto);
         }
@@ -120,7 +125,7 @@ namespace ASPNETCoreWebAPI.Controllers
             if (dto == null || dto.Id <= 0)
                 return BadRequest();
 
-            var existingStudent = await _studentRepository.GetByIdAsync(dto.Id, true);
+            var existingStudent = await _studentRepository.GetAsync(student => student.Id == dto.Id, true);
 
             if (existingStudent == null)
                 return NotFound();
@@ -143,7 +148,7 @@ namespace ASPNETCoreWebAPI.Controllers
             if (patchDocument == null || id <= 0)
                 return BadRequest();
 
-            var existingStudent = await _studentRepository.GetByIdAsync(id, true);
+            var existingStudent = await _studentRepository.GetAsync(student => student.Id == id, true);
 
             if (existingStudent == null)
                 return NotFound();
@@ -172,7 +177,7 @@ namespace ASPNETCoreWebAPI.Controllers
             if (id <= 0)
                 return BadRequest();
 
-            var student = await _studentRepository.GetByIdAsync(id, false);
+            var student = await _studentRepository.GetAsync(student => student.Id == id, false);
             if (student == null)
                 return NotFound($"The student with id {id} not found!.");
 

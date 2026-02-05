@@ -18,6 +18,7 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddScoped<IMyLogger, LogToMemoryServer>();
 builder.Services.AddScoped<IStudentRepository, StudentRepository>();
+builder.Services.AddScoped(typeof(ICollegeRepository<>), typeof(CollegeRepository<>));
 
 //Log.Logger = new LoggerConfiguration()
 //    .MinimumLevel.Information()

@@ -27,6 +27,7 @@ A comprehensive guide to understanding Web APIs, their evolution, and practical 
 19. [Entity Framework Core](#19-entity-framework-core)
 20. [AutoMapper – Simplifying Object Mapping](#20-automapper--simplifying-object-mapping)
 21. [Repository Design Pattern](#21-repository-design-pattern)
+22. [Generic Repository Pattern (Advanced)](#22-generic-repository-pattern-advanced)
 
 ---
 
@@ -3487,6 +3488,386 @@ ASPNETCoreWebAPI/
 
 ---
 
+## 22. Generic Repository Pattern (Advanced)
+
+### 🤔 What is Generic Repository Pattern?
+
+**Generic Repository Pattern** (also called **Common Repository Pattern**) is an advanced version of the Repository Pattern that uses **C# Generics** to create a single repository that works for **ALL** database tables.
+
+Instead of creating separate repositories for each table (StudentRepository, CourseRepository, DepartmentRepository, etc.), we create ONE generic repository that can handle any table!
+
+---
+
+### ❌ The Problem: Too Many Repositories
+
+In our previous implementation, we created `StudentRepository` for the `Student` table:
+
+```csharp
+public class StudentRepository : IStudentRepository
+{
+    // CRUD methods for Student table
+}
+```
+
+Now imagine we have more tables:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    DATABASE TABLES                              │
+├─────────────────────────────────────────────────────────────────┤
+│  Student Table  →  Need StudentRepository                       │
+│  Course Table   →  Need CourseRepository                        │
+│  Department Table → Need DepartmentRepository                   │
+│  Teacher Table  →  Need TeacherRepository                       │
+│  Fee Table      →  Need FeeRepository                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+> ⚠️ **Problems:**
+>
+> - Too many repository classes (one for each table)
+> - Duplicate code everywhere (GetAll, GetById, Create, Update, Delete are same for all)
+> - Hard to maintain (change in one means change in all)
+> - More code = More bugs
+
+---
+
+### ✅ The Solution: Generic Repository
+
+Create ONE repository that works for ALL tables using **C# Generics**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              GENERIC REPOSITORY (ONE FOR ALL)                   │
+│                                                                 │
+│  ICollegeRepository<T>  ──────┐                                │
+│  CollegeRepository<T>         │                                │
+│                               │                                │
+│                               ├──▶ Works with Student          │
+│                               ├──▶ Works with Course           │
+│                               ├──▶ Works with Department       │
+│                               ├──▶ Works with ANY table!       │
+│                               └──▶ ...                         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 🛠️ Implementation Steps
+
+#### **Step 1: Create Generic Interface**
+
+The generic interface uses `<T>` to work with any type:
+
+📁 **Data/Repository/ICollegeRepository.cs**
+
+```csharp
+using System.Linq.Expressions;
+
+namespace ASPNETCoreWebAPI.Data.Repository
+{
+    public interface ICollegeRepository<T>
+    {
+        Task<List<T>> GetAllAsync();
+        Task<T> GetAsync(Expression<Func<T, bool>> filter, bool useNoTracking = false);
+        Task<T> CreateAsync(T dbrecord);
+        Task<T> UpdateAsync(T dbrecord);
+        Task<bool> DeleteAsync(T dbrecord);
+    }
+}
+```
+
+**Key Points:**
+
+- `<T>` is a generic type parameter (can be Student, Course, any entity)
+- `Expression<Func<T, bool>>` allows flexible filtering (like LINQ where clauses)
+- Works for ANY database entity that is a class
+
+---
+
+#### **Step 2: Implement Generic Repository**
+
+📁 **Data/Repository/CollegeRepository.cs**
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
+
+namespace ASPNETCoreWebAPI.Data.Repository
+{
+    public class CollegeRepository<T> : ICollegeRepository<T> where T : class
+    {
+        private readonly CollegeDBContext _dbContext;
+        private DbSet<T> _dbset;
+
+        public CollegeRepository(CollegeDBContext dbContext)
+        {
+            _dbContext = dbContext;
+            _dbset = _dbContext.Set<T>();  // Get DbSet for any table
+        }
+
+        public async Task<List<T>> GetAllAsync()
+        {
+            return await _dbset.ToListAsync();
+        }
+
+        public async Task<T> GetAsync(Expression<Func<T, bool>> filter, bool useNoTracking = false)
+        {
+            if (useNoTracking)
+                return await _dbset.AsNoTracking().Where(filter).FirstOrDefaultAsync();
+            else
+                return await _dbset.Where(filter).FirstOrDefaultAsync();
+        }
+
+        public async Task<T> CreateAsync(T dbrecord)
+        {
+            _dbset.Add(dbrecord);
+            await _dbContext.SaveChangesAsync();
+            return dbrecord;
+        }
+
+        public async Task<T> UpdateAsync(T dbrecord)
+        {
+            _dbContext.Update(dbrecord);
+            await _dbContext.SaveChangesAsync();
+            return dbrecord;
+        }
+
+        public async Task<bool> DeleteAsync(T dbrecord)
+        {
+            _dbset.Remove(dbrecord);
+            await _dbContext.SaveChangesAsync();
+            return true;
+        }
+    }
+}
+```
+
+**Key Points:**
+
+- `where T : class` ensures T must be a class (entity type)
+- `_dbContext.Set<T>()` dynamically gets the DbSet for any entity
+- Same code works for Student, Course, Department, etc.!
+
+---
+
+#### **Step 3: Register Generic Repository in DI**
+
+📁 **Program.cs**
+
+```csharp
+// Register generic repository (works for ALL tables)
+builder.Services.AddScoped(typeof(ICollegeRepository<>), typeof(CollegeRepository<>));
+```
+
+**Important:** Notice the `typeof(ICollegeRepository<>)` syntax – this registers the open generic type!
+
+---
+
+### 🔗 Inheriting Generic Repository in Table-Specific Repository
+
+Sometimes you need **table-specific methods** along with common CRUD. For example, `GetStudentsByFeesStatus()` only makes sense for Student table.
+
+**Solution:** Inherit from the generic repository and add custom methods:
+
+#### **Updated IStudentRepository**
+
+📁 **Data/Repository/IStudentRepository.cs**
+
+```csharp
+namespace ASPNETCoreWebAPI.Data.Repository
+{
+    // Inherit from generic interface + add custom methods
+    public interface IStudentRepository : ICollegeRepository<Student>
+    {
+        Task<List<Student>> GetStudentsByFeesStatusAsync(int feesStatus);
+    }
+}
+```
+
+---
+
+#### **Updated StudentRepository**
+
+📁 **Data/Repository/StudentRepository.cs**
+
+```csharp
+namespace ASPNETCoreWebAPI.Data.Repository
+{
+    // Inherit from generic repository + implement custom methods
+    public class StudentRepository : CollegeRepository<Student>, IStudentRepository
+    {
+        private readonly CollegeDBContext _dbContext;
+
+        public StudentRepository(CollegeDBContext dbContext) : base(dbContext)
+        {
+            _dbContext = dbContext;
+        }
+
+        // Custom method specific to Student
+        public async Task<List<Student>> GetStudentsByFeesStatusAsync(int feesStatus)
+        {
+            return await _dbContext.Students
+                .Where(s => s.FeesStatus == feesStatus)
+                .ToListAsync();
+        }
+    }
+}
+```
+
+**Key Points:**
+
+- `StudentRepository` inherits from `CollegeRepository<Student>`
+- Gets ALL common methods (GetAll, Create, Update, Delete) for FREE
+- Can add table-specific methods like `GetStudentsByFeesStatusAsync`
+
+---
+
+### 📁 Complete Architecture
+
+```
+                    ┌─────────────────────────────────┐
+                    │   ICollegeRepository<T>         │
+                    │   (Generic Interface)           │
+                    └─────────────┬───────────────────┘
+                                  │
+                   ┌──────────────┴──────────────┐
+                   │                             │
+          ┌────────▼────────┐         ┌─────────▼──────────┐
+          │ IStudentRepo    │         │ ICourseRepo        │
+          │ : ICollegeRepo  │         │ : ICollegeRepo     │
+          │   <Student>     │         │   <Course>         │
+          └────────┬────────┘         └─────────┬──────────┘
+                   │                            │
+
+          ┌────────▼────────────┐      ┌────────▼───────────┐
+          │ StudentRepository   │      │ CourseRepository   │
+          │ : CollegeRepository │      │ : CollegeRepository│
+          │   <Student>         │      │   <Course>         │
+          │                     │      │                    │
+          │ + Custom Methods    │      │ + Custom Methods   │
+          └─────────────────────┘      └────────────────────┘
+```
+
+---
+
+### 🎮 Using Generic Repository in Controller
+
+You can use the generic repository directly OR use the table-specific one:
+
+#### **Option 1: Use Generic Repository Directly**
+
+```csharp
+public class CourseController : ControllerBase
+{
+    private readonly ICollegeRepository<Course> _courseRepository;
+
+    public CourseController(ICollegeRepository<Course> courseRepository)
+    {
+        _courseRepository = courseRepository;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult> GetAllCourses()
+    {
+        var courses = await _courseRepository.GetAllAsync();
+        return Ok(courses);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult> GetCourseById(int id)
+    {
+        var course = await _courseRepository.GetAsync(c => c.Id == id);
+        return Ok(course);
+    }
+}
+```
+
+---
+
+#### **Option 2: Use Table-Specific Repository**
+
+```csharp
+public class StudentController : ControllerBase
+{
+    private readonly IStudentRepository _studentRepository;
+
+    public StudentController(IStudentRepository studentRepository)
+    {
+        _studentRepository = studentRepository;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult> GetAllStudents()
+    {
+        // Using inherited generic method
+        var students = await _studentRepository.GetAllAsync();
+        return Ok(students);
+    }
+
+    [HttpGet("fees/{status}")]
+    public async Task<ActionResult> GetStudentsByFees(int status)
+    {
+        // Using custom table-specific method
+        var students = await _studentRepository.GetStudentsByFeesStatusAsync(status);
+        return Ok(students);
+    }
+}
+```
+
+---
+
+### 📊 Before vs After Generic Repository
+
+| Table-Specific Repositories | Generic Repository            |
+| --------------------------- | ----------------------------- |
+| One repository per table    | ONE repository for all tables |
+| 100+ lines per repository   | ~60 lines TOTAL               |
+| Duplicate CRUD code         | Code reuse with generics      |
+| Hard to maintain            | Easy to maintain              |
+| 10 tables = 10 repositories | 10 tables = 1 repository      |
+| Add table = Create new repo | Add table = Use existing repo |
+
+---
+
+### 💡 Expression Trees for Flexible Filtering
+
+Notice the `GetAsync()` method uses `Expression<Func<T, bool>>`. This allows flexible filtering:
+
+```csharp
+// Get student by ID
+var student = await _repository.GetAsync(s => s.Id == 5);
+
+// Get student by email
+var student = await _repository.GetAsync(s => s.Email == "test@email.com");
+
+// Get student by name
+var student = await _repository.GetAsync(s => s.StudentName == "Kartik");
+
+// Complex filter
+var student = await _repository.GetAsync(s => s.Id > 10 && s.FeesStatus == 1);
+```
+
+The filter is a **lambda expression** that works like a LINQ `Where` clause!
+
+---
+
+### 🎯 Key Takeaways
+
+1. **Generic Repository** – ONE repository for ALL tables using `<T>`
+2. **Code Reuse** – Eliminate duplicate CRUD code across repositories
+3. **`where T : class`** – Constraint ensures T is an entity type
+4. **`_dbContext.Set<T>()`** – Dynamically get DbSet for any table
+5. **Inheritance** – Table-specific repos can inherit from generic + add custom methods
+6. **Expression Trees** – Flexible filtering with `Expression<Func<T, bool>>`
+7. **DI Registration** – Use `typeof(ICollegeRepository<>)` for open generics
+
+> 💡 **Best Practice:** Use generic repository for common CRUD, inherit for table-specific logic!
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
 ## 🎉 Conclusion
 
 You've learned:
@@ -3512,6 +3893,7 @@ You've learned:
 - ✅ Entity Framework Core for database operations with Code First approach
 - ✅ AutoMapper for simplifying object mapping between entities and DTOs
 - ✅ Repository Design Pattern for abstracting data access layer
+- ✅ Generic Repository Pattern for reusable CRUD operations across all tables
 
 **Happy Coding!** 🚀
 
