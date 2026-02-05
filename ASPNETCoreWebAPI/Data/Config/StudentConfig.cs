@@ -35,6 +35,10 @@ namespace ASPNETCoreWebAPI.Data.Config
                     DOB = new DateTime(2004,09,03)
                 }
             });
+
+            builder.HasOne(n => n.Department).WithMany(n => n.Students)
+                .HasForeignKey(n => n.DepartmentId)
+                .HasConstraintName("FK_Student_Department");
         }
     }
 }

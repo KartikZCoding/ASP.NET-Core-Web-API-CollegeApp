@@ -25,6 +25,7 @@ A comprehensive guide to understanding Web APIs, their evolution, and practical 
 17. [Built-in Logger in Web API](#17-built-in-logger-in-web-api)
 18. [Serilog – Advanced Logging](#18-serilog--advanced-logging)
 19. [Entity Framework Core](#19-entity-framework-core)
+    19.1. [Creating Foreign Keys in EF Core](#191-creating-foreign-keys-in-ef-core)
 20. [AutoMapper – Simplifying Object Mapping](#20-automapper--simplifying-object-mapping)
 21. [Repository Design Pattern](#21-repository-design-pattern)
 22. [Generic Repository Pattern (Advanced)](#22-generic-repository-pattern-advanced)
@@ -2951,6 +2952,115 @@ _dbContext.SaveChanges();               // Execute DELETE
 | **HasData()**            | Seed default data into tables          |
 
 > 💡 **Tip:** Always call `SaveChanges()` after Add, Update, or Remove operations!
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
+### 19.1. Creating Foreign Keys in EF Core
+
+**Foreign Keys** create relationships between tables. In EF Core Code First, you define them using **navigation properties** and **Fluent API**.
+
+#### **Step 1: Define Navigation Properties**
+
+📁 **Data/Student.cs** (Child Entity)
+
+```csharp
+public class Student
+{
+    public int Id { get; set; }
+    public string StudentName { get; set; }
+    public string Email { get; set; }
+
+    // Foreign Key Property
+    public int? DepartmentId { get; set; }
+
+    // Navigation Property
+    public virtual Department? Department { get; set; }
+}
+```
+
+📁 **Data/Department.cs** (Parent Entity)
+
+```csharp
+public class Department
+{
+    public int Id { get; set; }
+    public string DepartmentName { get; set; }
+
+    // Collection Navigation Property
+    public virtual ICollection<Student> Students { get; set; }
+}
+```
+
+**Key Points:**
+
+- `DepartmentId` = Foreign key property (nullable for optional relationship)
+- `Department` = Navigation property to parent
+- `Students` = Collection navigation property in parent
+- `virtual` keyword enables lazy loading
+
+---
+
+#### **Step 2: Configure with Fluent API**
+
+📁 **Data/Config/StudentConfig.cs**
+
+```csharp
+public class StudentConfig : IEntityTypeConfiguration<Student>
+{
+    public void Configure(EntityTypeBuilder<Student> builder)
+    {
+        // Configure Foreign Key Relationship
+        builder.HasOne(s => s.Department)           // Student has one Department
+               .WithMany(d => d.Students)           // Department has many Students
+               .HasForeignKey(s => s.DepartmentId)  // Foreign key column
+               .HasConstraintName("FK_Student_Department"); // Constraint name in DB
+    }
+}
+```
+
+**Relationship Breakdown:**
+
+- `HasOne()` → Student has ONE Department
+- `WithMany()` → Department has MANY Students
+- `HasForeignKey()` → Specifies the FK column
+- `HasConstraintName()` → Custom constraint name (optional)
+
+---
+
+#### **Database Result**
+
+After migration, SQL Server creates:
+
+```sql
+ALTER TABLE Students
+ADD CONSTRAINT FK_Student_Department
+FOREIGN KEY (DepartmentId) REFERENCES Departments(Id);
+```
+
+---
+
+#### **Relationship Types**
+
+| Code Pattern           | Relationship Type  |
+| ---------------------- | ------------------ |
+| `HasOne().WithMany()`  | One-to-Many (1:N)  |
+| `HasOne().WithOne()`   | One-to-One (1:1)   |
+| `HasMany().WithMany()` | Many-to-Many (N:M) |
+
+---
+
+#### **🎯 Quick Tips**
+
+1. **Nullable FK** → `int?` for optional relationships
+2. **Required FK** → `int` for mandatory relationships
+3. **Use `virtual`** → Enables lazy loading
+4. **OnDelete Behavior:**
+   ```csharp
+   .OnDelete(DeleteBehavior.Cascade)  // Delete students when department deleted
+   .OnDelete(DeleteBehavior.Restrict) // Prevent deletion if students exist
+   ```
 
 ⬆️ [Back to Table of Contents](#-table-of-contents)
 
