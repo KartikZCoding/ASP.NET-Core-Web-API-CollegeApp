@@ -30,6 +30,10 @@ A comprehensive guide to understanding Web APIs, their evolution, and practical 
 20. [AutoMapper – Simplifying Object Mapping](#20-automapper--simplifying-object-mapping)
 21. [Repository Design Pattern](#21-repository-design-pattern)
 22. [Generic Repository Pattern (Advanced)](#22-generic-repository-pattern-advanced)
+23. [Security in Web API](#23-security-in-web-api)
+24. [CORS – Cross-Origin Resource Sharing](#24-cors--cross-origin-resource-sharing)
+25. [CORS Scenarios](#25-cors-scenarios)
+26. [Enabling CORS in Web API](#26-enabling-cors-in-web-api)
 
 ---
 
@@ -4458,6 +4462,515 @@ The filter is a **lambda expression** that works like a LINQ `Where` clause!
 
 ---
 
+## 23. Security in Web API
+
+### 🔐 Why Security Matters
+
+Till now, we've created Web API services and consumed them using **Postman** and **Swagger**. In real-world scenarios, APIs are consumed by applications.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         WHO CONSUMES YOUR API?                                   │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   ✅ Internal Applications        ✅ External Applications       ❌ Unwanted    │
+│   ┌─────────────────────┐        ┌─────────────────────┐        ┌─────────────┐ │
+│   │   Your Company's    │        │   Partner Apps      │        │   Hackers   │ │
+│   │   Mobile App        │        │   Third-Party       │        │   Bots      │ │
+│   │   Web Dashboard     │        │   Integrations      │        │   Scrapers  │ │
+│   └─────────────────────┘        └─────────────────────┘        └─────────────┘ │
+│                                                                                  │
+│                              ❓ How to block unwanted access?                    │
+│                              ❓ How to allow only authorized apps?               │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 🛡️ Stages of Web API Security
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           SECURITY LAYERS IN WEB API                             │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   Stage 1: CORS              Stage 2: Authentication      Stage 3: Authorization│
+│   ┌───────────────────┐      ┌───────────────────┐        ┌───────────────────┐ │
+│   │ Which ORIGINS     │ ───▶ │ WHO are you?      │ ───▶   │ WHAT can you do?  │ │
+│   │ can access?       │      │ (Identity)        │        │ (Permissions)     │ │
+│   │                   │      │                   │        │                   │ │
+│   │ Allow specific    │      │ JWT Token         │        │ Roles: Admin,     │ │
+│   │ domains only      │      │ API Key           │        │ User, Guest       │ │
+│   └───────────────────┘      └───────────────────┘        └───────────────────┘ │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Stage                 | Purpose                                            | Example                         |
+| --------------------- | -------------------------------------------------- | ------------------------------- |
+| **1. CORS**           | Decide which origins (domains) can access your API | Allow only `collegeapp.com`     |
+| **2. Authentication** | Verify identity of the user/application            | JWT Token, API Key              |
+| **3. Authorization**  | Verify what actions the user can perform           | Admin can delete, User can read |
+
+> ⚠️ **Important:** These stages work together. CORS alone is NOT enough for complete security!
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
+## 24. CORS – Cross-Origin Resource Sharing
+
+### 🤔 What is CORS?
+
+**CORS (Cross-Origin Resource Sharing)** is a browser security feature that controls which websites can access your API.
+
+> ⚠️ **Important:** CORS is **NOT a security feature** – it actually **relaxes security**! It allows a server to explicitly permit some cross-origin requests while rejecting others. An API is not safer by allowing CORS.
+
+---
+
+### 🌐 Understanding "Origin"
+
+An **origin** is a combination of:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              ORIGIN = SCHEMA + DOMAIN + PORT                     │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   https://collegeapp.com:443/api/getallstudents                                  │
+│   ──────  ───────────────  ───                                                   │
+│   Schema     Domain        Port                                                  │
+│                                                                                  │
+│   Origin = https://collegeapp.com:443                                            │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### ✅ Same Origin Examples
+
+These URLs have the **SAME origin** (same schema, domain, port):
+
+| URL 1                                       | URL 2                                    | Same Origin? |
+| ------------------------------------------- | ---------------------------------------- | ------------ |
+| `https://collegeapp.com/api/getallstudents` | `https://collegeapp.com/angularhomepage` | ✅ Yes       |
+| `https://collegeapp.com/api/students`       | `https://collegeapp.com/api/teachers`    | ✅ Yes       |
+
+---
+
+### ❌ Different Origin Examples
+
+These URLs have **DIFFERENT origins**:
+
+| URL 1                                 | URL 2                                      | Why Different?                   |
+| ------------------------------------- | ------------------------------------------ | -------------------------------- |
+| `https://collegeapp.com/api/students` | `https://collegeapp.net/api/students`      | Different domain extension       |
+| `https://collegeapp.com/api/students` | `http://collegeapp.com/api/students`       | Different schema (https vs http) |
+| `https://collegeapp.com/api/students` | `https://collegeapp.com:9000/api/students` | Different port                   |
+
+---
+
+### 🔄 How CORS Works
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              CORS REQUEST FLOW                                   │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   WEB API SERVER                              CLIENT REQUESTS                    │
+│   https://collegeapp.com/api/getstudents                                         │
+│                                                                                  │
+│        │                                                                         │
+│        ├───────────▶ https://google.com          ❌ REJECT (different origin)   │
+│        │                                                                         │
+│        ├───────────▶ https://collegeapp.com      ✅ ACCEPT (same origin)        │
+│        │                                                                         │
+│        ├───────────▶ https://microsoft.com       ❌ REJECT (different origin)   │
+│        │                                                                         │
+│        └───────────▶ http://localhost:5173       ✅ ACCEPT (if CORS policy set) │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+> 💡 **Key Insight:** By default, browsers block cross-origin requests. CORS policies tell the browser which origins to allow.
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
+## 25. CORS Scenarios
+
+There are three main CORS scenarios:
+
+### 1️⃣ Simple Request
+
+**Simple requests** are basic requests that don't trigger a preflight check.
+
+**Requirements for Simple Request:**
+
+- Methods: `GET`, `HEAD`, `POST` only
+- Headers: Only basic headers like `Accept`, `Content-Type` (with limited values)
+- Content-Type: Only `application/x-www-form-urlencoded`, `multipart/form-data`, or `text/plain`
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              SIMPLE REQUEST FLOW                                 │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   CLIENT                                                   SERVER                │
+│   (Browser)                                                (Web API)             │
+│                                                                                  │
+│      │                                                         │                 │
+│      │  ─────────────────────────────────────────────────▶     │                 │
+│      │  GET /api/getallstudents HTTP/1.1                       │                 │
+│      │  Origin: https://collegeapp.com                         │                 │
+│      │                                                         │                 │
+│      │     ◀─────────────────────────────────────────────────  │                 │
+│      │     HTTP/1.1 200 OK                                     │                 │
+│      │     Access-Control-Allow-Origin: *                      │                 │
+│      │     (or specific origin)                                │                 │
+│      │                                                         │                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+> 💡 The server responds with `Access-Control-Allow-Origin` header. Use `*` for all origins or specify the exact origin like `https://collegeapp.com`.
+
+---
+
+### 2️⃣ Preflight Request
+
+**Preflight requests** are sent by the browser before the actual request for "non-simple" requests.
+
+**When Preflight is Required:**
+
+- Methods: `PUT`, `DELETE`, `PATCH`, or custom methods
+- Custom headers: `Authorization`, `X-Custom-Header`, etc.
+- Content-Type: `application/json`
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            PREFLIGHT REQUEST FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   CLIENT                                                   SERVER                │
+│   (Browser)                                                (Web API)             │
+│                                                                                  │
+│      │  STEP 1: Preflight (OPTIONS request)                    │                 │
+│      │  ─────────────────────────────────────────────────▶     │                 │
+│      │  OPTIONS /api/getallstudents HTTP/1.1                   │                 │
+│      │  Origin: https://collegeapp.com                         │                 │
+│      │  Access-Control-Request-Method: DELETE                  │                 │
+│      │                                                         │                 │
+│      │     ◀─────────────────────────────────────────────────  │                 │
+│      │     HTTP/1.1 204 No Content                             │                 │
+│      │     Access-Control-Allow-Origin: https://collegeapp.com │                 │
+│      │     Access-Control-Allow-Methods: DELETE                │                 │
+│      │                                                         │                 │
+│      │  STEP 2: Actual Request (after preflight success)       │                 │
+│      │  ─────────────────────────────────────────────────▶     │                 │
+│      │  DELETE /api/student/1 HTTP/1.1                         │                 │
+│      │  Origin: https://collegeapp.com                         │                 │
+│      │                                                         │                 │
+│      │     ◀─────────────────────────────────────────────────  │                 │
+│      │     HTTP/1.1 200 OK                                     │                 │
+│      │     Access-Control-Allow-Origin: https://collegeapp.com │                 │
+│      │                                                         │                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+> 💡 The browser first sends an `OPTIONS` request to check if the server allows the actual request. If successful (204), then the actual request is sent.
+
+---
+
+### 3️⃣ Request with Credentials
+
+When requests include cookies or authentication headers, special configuration is needed.
+
+| Scenario          | CORS Configuration                                                            |
+| ----------------- | ----------------------------------------------------------------------------- |
+| Simple Request    | `Access-Control-Allow-Origin: *` or specific origin                           |
+| Preflight Request | Same + `Access-Control-Allow-Methods`                                         |
+| With Credentials  | Must use specific origin (not `*`) + `Access-Control-Allow-Credentials: true` |
+
+---
+
+### 📊 CORS Scenarios Summary
+
+| Scenario          | HTTP Method              | Custom Headers? | Preflight? |
+| ----------------- | ------------------------ | --------------- | ---------- |
+| Simple Request    | GET, HEAD, POST          | No              | ❌ No      |
+| Preflight Request | PUT, DELETE, PATCH, etc. | Yes             | ✅ Yes     |
+| With Credentials  | Any                      | Any             | Depends    |
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
+## 26. Enabling CORS in Web API
+
+There are **three ways** to enable CORS in ASP.NET Core Web API:
+
+1. Using middleware with Named or Default policy
+2. Using endpoint routing
+3. Using the `[EnableCors]` attribute
+
+---
+
+### 1️⃣ Using Middleware (Named & Default Policies)
+
+**Step 1: Define CORS Policies in `Program.cs`**
+
+```csharp
+// Program.cs
+
+// Add CORS services
+builder.Services.AddCors(options =>
+{
+    // Named Policy: AllowAll - permits any origin
+    options.AddPolicy("AllowAll", policy =>
+    {
+        // For all origins
+        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+    });
+
+    // Named Policy: AllowOnlyLocalhost - permits only localhost
+    options.AddPolicy("AllowOnlyLocalhost", policy =>
+    {
+        // For specific origin
+        policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod();
+    });
+
+    // Named Policy: AllowOnlyGoogle - permits Google domains
+    options.AddPolicy("AllowOnlyGoogle", policy =>
+    {
+        // For specific origins
+        policy.WithOrigins("http://google.com", "http://gmail.com", "http://drive.google.com")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+
+    // Named Policy: AllowOnlyMicrosoft - permits Microsoft domains
+    options.AddPolicy("AllowOnlyMicrosoft", policy =>
+    {
+        // For specific origins
+        policy.WithOrigins("http://outlook.com", "http://microsoft.com", "http://onedrive.com")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+
+    // Default Policy (uncomment to use)
+    // options.AddDefaultPolicy(policy =>
+    // {
+    //     policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+    // });
+});
+```
+
+**Step 2: Apply CORS Middleware**
+
+```csharp
+// Program.cs - Configure middleware pipeline
+
+var app = builder.Build();
+
+app.UseHttpsRedirection();
+app.UseRouting();
+
+// Apply CORS middleware with named policy
+app.UseCors("AllowAll");
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+```
+
+> ⚠️ **Order Matters:** `UseCors()` must be called after `UseRouting()` and before `UseAuthorization()`.
+
+---
+
+### 📌 Named vs Default Policy
+
+| Feature             | Named Policy                             | Default Policy                    |
+| ------------------- | ---------------------------------------- | --------------------------------- |
+| Definition          | `AddPolicy("PolicyName", policy => ...)` | `AddDefaultPolicy(policy => ...)` |
+| Usage in Middleware | `app.UseCors("PolicyName")`              | `app.UseCors()`                   |
+| Attribute Usage     | `[EnableCors("PolicyName")]`             | `[EnableCors]`                    |
+| Flexibility         | Multiple policies for different needs    | Single default for all            |
+| Best For            | Different origins for different APIs     | Same origin rules for entire app  |
+
+---
+
+### 2️⃣ Using Endpoint Routing
+
+You can apply different CORS policies to specific endpoints:
+
+```csharp
+// Program.cs
+
+app.UseRouting();
+app.UseCors("AllowAll");
+app.UseAuthorization();
+
+app.UseEndpoints(endpoints =>
+{
+    // Specific endpoint with specific CORS policy
+    endpoints.MapGet("api/testingendpoint",
+        context => context.Response.WriteAsync("Test Response"))
+        .RequireCors("AllowOnlyLocalhost");  // Only localhost can access
+
+    // All controllers with AllowAll policy
+    endpoints.MapControllers().RequireCors("AllowAll");
+
+    // Another endpoint (inherits from middleware CORS)
+    endpoints.MapGet("api/testingendpoint1",
+        context => context.Response.WriteAsync("Test Response 1"));
+});
+```
+
+> 💡 Use `RequireCors()` on endpoints to override the default middleware policy.
+
+---
+
+### 3️⃣ Using the `[EnableCors]` Attribute
+
+Apply CORS policies at the controller or action level:
+
+**Controller Level:**
+
+```csharp
+// StudentController.cs
+using Microsoft.AspNetCore.Cors;
+
+[Route("api/[controller]")]
+[ApiController]
+// With the [EnableCors] attribute.
+[EnableCors(PolicyName = "AllowOnlyLocalhost")]
+public class StudentController : ControllerBase
+{
+    // All actions in this controller will use "AllowOnlyLocalhost" policy
+}
+```
+
+```csharp
+// DemoController.cs
+using Microsoft.AspNetCore.Cors;
+
+[Route("api/[controller]")]
+[ApiController]
+// With the [EnableCors] attribute.
+[EnableCors(PolicyName = "AllowOnlyGoogle")]
+public class DemoController : ControllerBase
+{
+    // All actions use "AllowOnlyGoogle" policy
+}
+```
+
+```csharp
+// MicrosoftController.cs
+using Microsoft.AspNetCore.Cors;
+
+[Route("api/[controller]")]
+[ApiController]
+// With the [EnableCors] attribute.
+[EnableCors(PolicyName = "AllowOnlyMicrosoft")]
+public class MicrosoftController : ControllerBase
+{
+    // All actions use "AllowOnlyMicrosoft" policy
+}
+```
+
+---
+
+### 🚫 Using `[DisableCors]` Attribute
+
+You can disable CORS for specific actions:
+
+```csharp
+// DemoController.cs
+[Route("api/[controller]")]
+[ApiController]
+[EnableCors(PolicyName = "AllowOnlyGoogle")]
+public class DemoController : ControllerBase
+{
+    [HttpGet("customers", Name = "GetCustomerData")]
+    // With the [DisableCors] attribute - blocks all cross-origin requests
+    [DisableCors]
+    public IEnumerable<dynamic> Get()
+    {
+        return _dbContext.Customers.ToList();
+    }
+}
+```
+
+> 💡 `[DisableCors]` is useful when you want to block cross-origin access for sensitive endpoints while allowing it for others in the same controller.
+
+---
+
+### 🧪 Testing CORS with UI
+
+This project includes a test UI in the `student-ui` folder (React + Vite) to verify CORS behavior.
+
+**Frontend API Call:**
+
+```javascript
+// student-ui/src/api/studentApi.js
+import axios from "axios";
+
+const BASE_URL = "https://localhost:7234/api/testingendpoint";
+
+export const getAllStudents = async () => {
+  const response = await axios.get(`${BASE_URL}`, {
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+  });
+  return response.data;
+};
+```
+
+**How to Test:**
+
+1. Run the Web API (`https://localhost:7234`)
+2. Run the UI (`http://localhost:5173`)
+3. Open browser DevTools → Network tab
+4. Click "Get Students" button
+5. Check request/response headers:
+   - `Origin: http://localhost:5173`
+   - `Access-Control-Allow-Origin: http://localhost:5173` (or `*`)
+
+---
+
+### 📊 CORS Methods Comparison
+
+| Method               | Scope                      | Flexibility | Use Case                                |
+| -------------------- | -------------------------- | ----------- | --------------------------------------- |
+| **Middleware**       | Entire application         | Low         | Same policy for all endpoints           |
+| **Endpoint Routing** | Specific endpoints         | Medium      | Different policies for different routes |
+| **`[EnableCors]`**   | Controller or Action level | High        | Fine-grained control per controller     |
+| **`[DisableCors]`**  | Action level               | High        | Block specific sensitive endpoints      |
+
+---
+
+### 🎯 Key Takeaways
+
+1. **CORS is NOT security** – It relaxes browser restrictions, not adds protection
+2. **Origin = Schema + Domain + Port** – All three must match for same-origin
+3. **Simple vs Preflight** – PUT/DELETE/custom headers trigger preflight OPTIONS request
+4. **Three ways to enable** – Middleware, Endpoint Routing, `[EnableCors]` attribute
+5. **Named policies** – Define multiple policies for different origins/controllers
+6. **`[DisableCors]`** – Block cross-origin access for sensitive endpoints
+7. **Order matters** – `UseCors()` must come after `UseRouting()` and before `UseAuthorization()`
+
+> 💡 **Best Practice:** Use CORS as the first layer, but always implement proper Authentication and Authorization for complete security!
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
 ## 🎉 Conclusion
 
 You've learned:
@@ -4485,6 +4998,10 @@ You've learned:
 - ✅ AutoMapper for simplifying object mapping between entities and DTOs
 - ✅ Repository Design Pattern for abstracting data access layer
 - ✅ Generic Repository Pattern for reusable CRUD operations across all tables
+- ✅ Security stages in Web API (CORS → Authentication → Authorization)
+- ✅ CORS concepts and same-origin vs cross-origin understanding
+- ✅ CORS scenarios (Simple Request, Preflight Request, Credentials)
+- ✅ Multiple ways to enable CORS in ASP.NET Core Web API
 
 **Happy Coding!** 🚀
 
