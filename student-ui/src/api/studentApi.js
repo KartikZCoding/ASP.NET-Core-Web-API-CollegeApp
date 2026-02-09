@@ -1,13 +1,35 @@
 import axios from "axios";
 
-const BASE_URL = "https://localhost:7234/api/Student";
+const API_BASE = "https://localhost:7234/api";
+const STUDENT_URL = `${API_BASE}/Student`;
+const LOGIN_URL = `${API_BASE}/Login`;
+
+// Set default headers for all axios requests
+axios.defaults.headers.common["Content-Type"] = "application/json";
+axios.defaults.headers.common["Accept"] = "application/json";
+
+// Set token directly in axios headers
+export const setToken = (token) => {
+  if (token) {
+    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete axios.defaults.headers.common["Authorization"];
+  }
+};
+
+export const getToken = () => {
+  return (
+    axios.defaults.headers.common["Authorization"]?.replace("Bearer ", "") ||
+    null
+  );
+};
+
+export const login = async (username, password) => {
+  const response = await axios.post(LOGIN_URL, { username, password });
+  return response.data;
+};
 
 export const getAllStudents = async () => {
-  const response = await axios.get(`${BASE_URL}/All`, {
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-  });
+  const response = await axios.get(`${STUDENT_URL}/All`);
   return response.data;
 };
