@@ -15,7 +15,8 @@ namespace ASPNETCoreWebAPI.Controllers
     [ApiController]
     //With the [EnableCors] attribute.
     [EnableCors(PolicyName = "AllowOnlyLocalhost")]
-    [Authorize(Roles = "Superadmin, Admin")]
+    //[Authorize(AuthenticationSchemes = "LoginForLocalUsers", Roles = "Superadmin")] // 403: Forbidden
+    [Authorize(AuthenticationSchemes = "LoginForLocalUsers", Roles = "Superadmin, Admin")]
     public class StudentController : ControllerBase
     {
         //common repository
