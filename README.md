@@ -6047,6 +6047,425 @@ export default App;
 
 > ⚠️ **Security Note:** JWT payload is only encoded (Base64), not encrypted. Never store sensitive data like passwords in the payload!
 
+---
+
+### 🔐 Using Multiple JWT Authentications (Default vs Named JWT Policies)
+
+In real-world applications, you may need to support **multiple authentication providers** (like Google, Microsoft, Local login) with different JWT tokens. ASP.NET Core allows you to configure **named JWT policies** to handle this scenario.
+
+---
+
+#### 🚦 Understanding 401 vs 403 Errors
+
+Before diving into multiple policies, let's understand two important HTTP error codes:
+
+| Error Code | Name         | Meaning                                  | When It Occurs                  |
+| ---------- | ------------ | ---------------------------------------- | ------------------------------- |
+| **401**    | Unauthorized | User is NOT authenticated                | Missing or invalid JWT token    |
+| **403**    | Forbidden    | User IS authenticated but not authorized | User doesn't have required role |
+
+##### Example: 403 Forbidden Error
+
+```
+Scenario: StudentController requires roles "Superadmin, Admin"
+User logs in successfully with role "Admin" → Token generated ✅
+User accesses /api/Student → Access granted ✅
+
+Now, if we change the controller to require only "Superadmin":
+[Authorize(Roles = "Superadmin")]  // Admin role removed
+
+User with "Admin" role tries to access /api/Student
+→ 403 Forbidden ❌ (User is authenticated but lacks the required role)
+```
+
+> 💡 **Key Point:** 403 means the user's identity is verified (authenticated), but they don't have permission (not authorized) for that specific resource.
+
+---
+
+#### 📊 Default vs Named JWT Policies
+
+| Aspect               | Default Policy                 | Named Policies                                      |
+| -------------------- | ------------------------------ | --------------------------------------------------- |
+| **When to use**      | Single authentication provider | Multiple authentication providers                   |
+| **Configuration**    | `.AddJwtBearer()`              | `.AddJwtBearer("PolicyName", ...)`                  |
+| **Token Validation** | One secret key                 | Different secret keys per provider                  |
+| **Controller Usage** | `[Authorize]`                  | `[Authorize(AuthenticationSchemes = "PolicyName")]` |
+
+---
+
+#### Step 1: Configure Multiple Secret Keys
+
+Add separate secret keys for each authentication provider in `appsettings.json`:
+
+**appsettings.json:**
+
+```json
+{
+  "ConnectionStrings": {
+    "CollegeAppDBConnection": "..."
+  },
+  // Different secret keys for different providers
+  "JWTSecretForGoogle": "GoogleThisissecretkey$%^&*()cauefuihUCHELAW...",
+  "JWTSecretForMicrosoft": "MicrosoftThisissecretkey$%^&*()cauefuihUCHELAW...",
+  "JWTSecretForLocal": "LocalThisissecretkey$%^&*()cauefuihUCHELAW..."
+}
+```
+
+---
+
+#### Step 2: Configure Named JWT Policies in Program.cs
+
+**Program.cs – Multiple Named JWT Policies:**
+
+```csharp
+// Program.cs
+
+// Step 1: Read different secret keys for each provider
+var keyGoogle = Encoding.ASCII.GetBytes(
+    builder.Configuration.GetValue<string>("JWTSecretForGoogle")
+);
+var keyMicrosoft = Encoding.ASCII.GetBytes(
+    builder.Configuration.GetValue<string>("JWTSecretForMicrosoft")
+);
+var keyLocal = Encoding.ASCII.GetBytes(
+    builder.Configuration.GetValue<string>("JWTSecretForLocal")
+);
+
+// Step 2: Configure Authentication with Named Policies
+builder.Services.AddAuthentication(options =>
+{
+    // Default scheme (used when no specific scheme is mentioned)
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+// Named Policy 1: For Google Users
+.AddJwtBearer("LoginForGoogleUsers", options =>
+{
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters()
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(keyGoogle),  // Google's key
+        ValidateIssuer = false,
+        ValidateAudience = false
+    };
+})
+// Named Policy 2: For Microsoft Users
+.AddJwtBearer("LoginForMicrosoftUsers", options =>
+{
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters()
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(keyMicrosoft),  // Microsoft's key
+        ValidateIssuer = false,
+        ValidateAudience = false
+    };
+})
+// Named Policy 3: For Local Users
+.AddJwtBearer("LoginForLocalUsers", options =>
+{
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters()
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(keyLocal),  // Local key
+        ValidateIssuer = false,
+        ValidateAudience = false
+    };
+});
+```
+
+---
+
+#### Step 3: Update LoginDTO to Include Policy
+
+**LoginDTO.cs – With Policy Field:**
+
+```csharp
+// Model/LoginDTO.cs
+using System.ComponentModel.DataAnnotations;
+
+namespace ASPNETCoreWebAPI.Model
+{
+    public class LoginDTO
+    {
+        [Required]
+        public string Policy { get; set; }     // "Local", "Microsoft", or "Google"
+
+        [Required]
+        public string Username { get; set; }
+
+        [Required]
+        public string Password { get; set; }
+    }
+}
+```
+
+---
+
+#### Step 4: Update LoginController to Handle Multiple Policies
+
+**LoginController.cs – Dynamic Key Selection:**
+
+```csharp
+// Controllers/LoginController.cs
+[Route("api/[controller]")]
+[ApiController]
+[AllowAnonymous]
+public class LoginController : ControllerBase
+{
+    private readonly IConfiguration _configuration;
+
+    public LoginController(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
+    [HttpPost]
+    public ActionResult Login(LoginDTO model)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest("Please provide policy, username & password");
+
+        LoginResponseDTO response = new() { Username = model.Username };
+
+        // Step 1: Select the correct secret key based on policy
+        byte[] key = null;
+        if (model.Policy == "Local")
+            key = Encoding.ASCII.GetBytes(
+                _configuration.GetValue<string>("JWTSecretForLocal")
+            );
+        else if (model.Policy == "Microsoft")
+            key = Encoding.ASCII.GetBytes(
+                _configuration.GetValue<string>("JWTSecretForMicrosoft")
+            );
+        else if (model.Policy == "Google")
+            key = Encoding.ASCII.GetBytes(
+                _configuration.GetValue<string>("JWTSecretForGoogle")
+            );
+
+        // Step 2: Validate credentials
+        if (model.Username == "Kartik" && model.Password == "Kartik@123")
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var tokenDescriptor = new SecurityTokenDescriptor()
+            {
+                Subject = new ClaimsIdentity(new Claim[]
+                {
+                    new Claim(ClaimTypes.Name, model.Username),
+                    new Claim(ClaimTypes.Role, "Admin")  // Role assigned to user
+                }),
+                Expires = DateTime.Now.AddHours(4),
+                // Step 3: Sign with the selected key
+                SigningCredentials = new SigningCredentials(
+                    new SymmetricSecurityKey(key),
+                    SecurityAlgorithms.HmacSha512Signature
+                )
+            };
+
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            response.token = tokenHandler.WriteToken(token);
+        }
+        else
+        {
+            return Ok("Invalid username & password");
+        }
+
+        return Ok(response);
+    }
+}
+```
+
+---
+
+#### Step 5: Protect Controllers with Specific Authentication Schemes
+
+**StudentController.cs – Using Local Policy:**
+
+```csharp
+// Controllers/StudentController.cs
+[Route("api/[controller]")]
+[ApiController]
+// 👇 Uses "LoginForLocalUsers" scheme with role-based authorization
+[Authorize(AuthenticationSchemes = "LoginForLocalUsers", Roles = "Superadmin, Admin")]
+public class StudentController : ControllerBase
+{
+    // Only users with Local token AND (Superadmin OR Admin) role can access
+
+    [HttpGet]
+    [Route("All")]
+    public async Task<ActionResult<IEnumerable<StudentDTO>>> GetStudentsAsync()
+    {
+        // Protected endpoint
+        return Ok(await _studentRepository.GetAllAsync());
+    }
+}
+```
+
+**MicrosoftController.cs – Using Microsoft Policy:**
+
+```csharp
+// Controllers/MicrosoftController.cs
+[Route("api/[controller]")]
+[ApiController]
+// 👇 Uses "LoginForMicrosoftUsers" scheme
+[Authorize(AuthenticationSchemes = "LoginForMicrosoftUsers", Roles = "Superadmin, Admin")]
+public class MicrosoftController : ControllerBase
+{
+    // Only users with Microsoft token AND (Superadmin OR Admin) role can access
+
+    [HttpGet]
+    public ActionResult Get()
+    {
+        return Ok("This is Microsoft protected data");
+    }
+}
+```
+
+---
+
+#### 📊 Authentication Flow with Multiple Policies
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                    MULTIPLE JWT POLICIES AUTHENTICATION                       │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────────────┐                        ┌─────────────────────┐      │
+│  │     FRONTEND        │                        │      BACKEND        │      │
+│  └─────────────────────┘                        └─────────────────────┘      │
+│                                                                               │
+│  ═══════════════════ LOGIN WITH POLICY SELECTION ════════════════════════    │
+│                                                                               │
+│  User selects policy:                                                         │
+│  ┌─────────────────────┐                                                      │
+│  │ ● Local             │                                                      │
+│  │ ○ Microsoft         │                                                      │
+│  │ ○ Google            │                                                      │
+│  └─────────────────────┘                                                      │
+│           │                                                                   │
+│           ▼                                                                   │
+│  ┌─────────────────────┐   POST /api/Login      ┌─────────────────────┐      │
+│  │ login("Local",      │   ─────────────────▶   │  LoginController    │      │
+│  │       "Kartik",     │   { policy: "Local",   │                     │      │
+│  │       "Kartik@123") │     username, pwd }    │  Selects key based  │      │
+│  └─────────────────────┘                        │  on policy          │      │
+│                                                 └─────────────────────┘      │
+│                                                          │                    │
+│                                                          ▼                    │
+│                                                 ┌─────────────────────┐      │
+│  Token signed with:                             │  if (policy=="Local")│      │
+│  JWTSecretForLocal ◀──────────────────────────  │    key = LocalKey   │      │
+│                                                 │  else if (Microsoft) │      │
+│                                                 │    key = MicrosoftKey│      │
+│                                                 └─────────────────────┘      │
+│                                                                               │
+│  ═════════════════ ACCESSING PROTECTED ENDPOINTS ════════════════════════    │
+│                                                                               │
+│  With LOCAL token:                                                            │
+│  ┌─────────────────────┐   GET /api/Student     ┌─────────────────────┐      │
+│  │ Authorization:      │   ─────────────────▶   │ [Authorize(Schemes= │      │
+│  │ Bearer <LocalToken> │                        │  "LoginForLocalUsers")]    │
+│  └─────────────────────┘                        │       ✅ SUCCESS    │      │
+│                                                 └─────────────────────┘      │
+│                                                                               │
+│  With LOCAL token:                                                            │
+│  ┌─────────────────────┐   GET /api/Microsoft   ┌─────────────────────┐      │
+│  │ Authorization:      │   ─────────────────▶   │ [Authorize(Schemes= │      │
+│  │ Bearer <LocalToken> │                        │  "LoginForMicrosoft")]     │
+│  └─────────────────────┘                        │       ❌ 401        │      │
+│                                                 │  (Wrong policy!)    │      │
+│                                                 └─────────────────────┘      │
+│                                                                               │
+│  ═══════════════════ ROLE MISMATCH (403 FORBIDDEN) ══════════════════════    │
+│                                                                               │
+│  User has role: "Admin"                                                       │
+│  Controller requires: [Authorize(Roles = "Superadmin")]                       │
+│                                                                               │
+│  ┌─────────────────────┐   GET /api/Student     ┌─────────────────────┐      │
+│  │ Token with role:    │   ─────────────────▶   │ Roles = "Superadmin"│      │
+│  │ "Admin"             │                        │                     │      │
+│  └─────────────────────┘                        │ ❌ 403 FORBIDDEN    │      │
+│                                                 │ (Authenticated but  │      │
+│                                                 │  not authorized!)   │      │
+│                                                 └─────────────────────┘      │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### Step 6: Frontend Integration
+
+Update the frontend to send the policy with login:
+
+**studentApi.js – With Policy Parameter:**
+
+```javascript
+// student-ui/src/api/studentApi.js
+export const login = async (policy, username, password) => {
+  // Send policy along with credentials
+  const response = await axios.post(LOGIN_URL, { policy, username, password });
+  return response.data;
+};
+
+// Call Microsoft-specific endpoint
+export const callMicrosoft = async () => {
+  const response = await axios.get(`${API_BASE}/Microsoft`);
+  return response.data;
+};
+```
+
+**Login.jsx – Policy Selection:**
+
+```jsx
+// student-ui/src/components/Login.jsx
+const handleLogin = async () => {
+  try {
+    // For Local authentication (StudentController)
+    const response = await login("Local", username, password);
+
+    // For Microsoft authentication (MicrosoftController)
+    // const response = await login("Microsoft", username, password);
+
+    // For Google authentication
+    // const response = await login("Google", username, password);
+
+    if (response && response.token) {
+      setToken(response.token);
+      setLoggedInUser(response.username);
+    }
+  } catch (err) {
+    setError(err.message);
+  }
+};
+```
+
+---
+
+#### 🧪 Testing Different Scenarios
+
+| Scenario                                            | Policy    | Endpoint         | Expected Result     |
+| --------------------------------------------------- | --------- | ---------------- | ------------------- |
+| Login with Local, access Student                    | Local     | `/api/Student`   | ✅ 200 OK           |
+| Login with Local, access Microsoft                  | Local     | `/api/Microsoft` | ❌ 401 Unauthorized |
+| Login with Microsoft, access Microsoft              | Microsoft | `/api/Microsoft` | ✅ 200 OK           |
+| Login with Admin role, endpoint requires Superadmin | Any       | Any              | ❌ 403 Forbidden    |
+
+---
+
+#### 💡 Key Points to Remember
+
+1. **Named Policies** – Use `.AddJwtBearer("PolicyName", ...)` for multiple providers
+2. **Secret Keys** – Each policy should have its own secret key
+3. **AuthenticationSchemes** – Controller must specify which scheme to use
+4. **401 vs 403** – 401 = Not authenticated, 403 = Authenticated but wrong role
+5. **Policy in Login Request** – Frontend must send the correct policy
+6. **Token Matching** – Token must be signed with the key that the controller expects
+
+> 🔒 **Security Best Practice:** Always verify that the token's policy matches the endpoint's authentication scheme. A token generated for "Local" policy won't work on endpoints protected by "Microsoft" policy.
+
 ⬆️ [Back to Table of Contents](#-table-of-contents)
 
 ---
@@ -6088,6 +6507,8 @@ You've learned:
 - ✅ Protecting controllers with `[Authorize]` attribute
 - ✅ Generating JWT tokens with `JwtSecurityTokenHandler` and claims
 - ✅ Complete frontend-backend JWT authentication flow (React + Web API)
+- ✅ Multiple JWT authentication policies (Default vs Named)
+- ✅ Understanding 401 (Unauthorized) vs 403 (Forbidden) errors
 
 **Happy Coding!** 🚀
 
