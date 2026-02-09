@@ -5438,6 +5438,615 @@ namespace ASPNETCoreWebAPI.Controllers
 
 > ⚠️ **Security Note:** JWT payload is only encoded (Base64), not encrypted. Never store sensitive data like passwords in the payload!
 
+---
+
+### 🔧 Generating JWT Token in Web API
+
+Now let's see how to **generate JWT tokens** in your Web API when a user logs in successfully.
+
+#### Step 1: Create Login DTOs
+
+First, create DTOs (Data Transfer Objects) for login request and response:
+
+**LoginDTO.cs – Request Model:**
+
+```csharp
+// Model/LoginDTO.cs
+using System.ComponentModel.DataAnnotations;
+
+namespace ASPNETCoreWebAPI.Model
+{
+    // This DTO receives username and password from the client
+    public class LoginDTO
+    {
+        [Required]  // Username is mandatory
+        public string Username { get; set; }
+
+        [Required]  // Password is mandatory
+        public string Password { get; set; }
+    }
+}
+```
+
+**LoginResponseDTO.cs – Response Model:**
+
+```csharp
+// Model/LoginResponseDTO.cs
+namespace ASPNETCoreWebAPI.Model
+{
+    // This DTO sends the generated token back to the client
+    public class LoginResponseDTO
+    {
+        public string Username { get; set; }  // Return username for display
+        public string token { get; set; }      // The JWT token string
+    }
+}
+```
+
+---
+
+#### Step 2: Create Login Controller
+
+Now create a controller that handles login requests and generates JWT tokens:
+
+**LoginController.cs – Complete Implementation:**
+
+```csharp
+// Controllers/LoginController.cs
+using ASPNETCoreWebAPI.Model;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+
+namespace ASPNETCoreWebAPI.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    [AllowAnonymous]  // 👈 IMPORTANT: Allow unauthenticated access to login endpoint
+    public class LoginController : ControllerBase
+    {
+        // Inject IConfiguration to read JWTSecret from appsettings.json
+        private readonly IConfiguration _configuration;
+
+        public LoginController(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
+        [HttpPost]
+        public ActionResult Login(LoginDTO model)
+        {
+            // Step 1: Validate the model (check if username & password are provided)
+            if (!ModelState.IsValid)
+            {
+                return BadRequest("Please provide username & password");
+            }
+
+            // Step 2: Create response object
+            LoginResponseDTO response = new();
+
+            // Step 3: Verify credentials (In real app, check against database)
+            if (model.Username == "Kartik" && model.Password == "Kartik@123")
+            {
+                // ========== JWT TOKEN GENERATION STARTS HERE ==========
+
+                // Step 4: Get the secret key from configuration
+                var key = Encoding.ASCII.GetBytes(
+                    _configuration.GetValue<string>("JWTSecret")
+                );
+
+                // Step 5: Create token handler
+                var tokenHandler = new JwtSecurityTokenHandler();
+
+                // Step 6: Create token descriptor with claims and settings
+                var tokenDescriptor = new SecurityTokenDescriptor()
+                {
+                    // Define the claims (user information) to include in token
+                    Subject = new ClaimsIdentity(new Claim[]
+                    {
+                        // Add username claim - identifies WHO the user is
+                        new Claim(ClaimTypes.Name, model.Username),
+
+                        // Add role claim - defines WHAT the user can do
+                        new Claim(ClaimTypes.Role, "Admin")
+                    }),
+
+                    // Set token expiration time (4 hours from now)
+                    Expires = DateTime.Now.AddHours(4),
+
+                    // Sign the token with our secret key using HMAC-SHA512
+                    SigningCredentials = new SigningCredentials(
+                        new SymmetricSecurityKey(key),
+                        SecurityAlgorithms.HmacSha512Signature
+                    )
+                };
+
+                // Step 7: Create the token
+                var token = tokenHandler.CreateToken(tokenDescriptor);
+
+                // Step 8: Convert token to string format
+                response.token = tokenHandler.WriteToken(token);
+                response.Username = model.Username;
+
+                // ========== JWT TOKEN GENERATION ENDS HERE ==========
+            }
+            else
+            {
+                // Invalid credentials - return error message
+                return Ok("Invalid username & password");
+            }
+
+            // Return the response with token
+            return Ok(response);
+        }
+    }
+}
+```
+
+---
+
+#### 📊 Token Generation Flow Diagram
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    JWT TOKEN GENERATION STEPS                     │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  1. Receive Login Request                                         │
+│     ┌────────────────────────────────────────────┐               │
+│     │  POST /api/Login                            │               │
+│     │  { "username": "Kartik", "password": "..." }│               │
+│     └────────────────────────────────────────────┘               │
+│                           │                                       │
+│                           ▼                                       │
+│  2. Validate Credentials                                          │
+│     ┌────────────────────────────────────────────┐               │
+│     │  Check username & password against DB       │               │
+│     │  (In this example: hardcoded values)        │               │
+│     └────────────────────────────────────────────┘               │
+│                           │                                       │
+│              ┌────────────┴────────────┐                          │
+│              ▼                         ▼                          │
+│         ❌ Invalid                  ✅ Valid                      │
+│     Return error message       Continue to Step 3                 │
+│                                        │                          │
+│                                        ▼                          │
+│  3. Get Secret Key from Configuration                             │
+│     ┌────────────────────────────────────────────┐               │
+│     │  var key = Encoding.ASCII.GetBytes(         │               │
+│     │      _configuration["JWTSecret"]            │               │
+│     │  );                                         │               │
+│     └────────────────────────────────────────────┘               │
+│                           │                                       │
+│                           ▼                                       │
+│  4. Create Claims (User Info)                                     │
+│     ┌────────────────────────────────────────────┐               │
+│     │  ClaimTypes.Name → "Kartik" (Username)      │               │
+│     │  ClaimTypes.Role → "Admin" (Role)           │               │
+│     └────────────────────────────────────────────┘               │
+│                           │                                       │
+│                           ▼                                       │
+│  5. Create Token Descriptor                                       │
+│     ┌────────────────────────────────────────────┐               │
+│     │  Subject: Claims                            │               │
+│     │  Expires: DateTime.Now.AddHours(4)          │               │
+│     │  SigningCredentials: HMAC-SHA512 + Key      │               │
+│     └────────────────────────────────────────────┘               │
+│                           │                                       │
+│                           ▼                                       │
+│  6. Generate & Return Token                                       │
+│     ┌────────────────────────────────────────────┐               │
+│     │  tokenHandler.CreateToken(tokenDescriptor)  │               │
+│     │  tokenHandler.WriteToken(token)             │               │
+│     │                                             │               │
+│     │  Response: { "username": "Kartik",          │               │
+│     │              "token": "eyJhbG..." }         │               │
+│     └────────────────────────────────────────────┘               │
+│                                                                   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### 🔑 Key Classes Used for Token Generation
+
+| Class                     | Namespace                         | Purpose                                              |
+| ------------------------- | --------------------------------- | ---------------------------------------------------- |
+| `JwtSecurityTokenHandler` | `System.IdentityModel.Tokens.Jwt` | Creates and writes JWT tokens                        |
+| `SecurityTokenDescriptor` | `Microsoft.IdentityModel.Tokens`  | Describes token properties (claims, expiry, signing) |
+| `ClaimsIdentity`          | `System.Security.Claims`          | Container for user claims                            |
+| `Claim`                   | `System.Security.Claims`          | Individual piece of user information                 |
+| `SymmetricSecurityKey`    | `Microsoft.IdentityModel.Tokens`  | The secret key for signing                           |
+| `SigningCredentials`      | `Microsoft.IdentityModel.Tokens`  | Combines key + algorithm for signing                 |
+
+---
+
+### 🎬 JWT Authentication in Action
+
+Now let's see how the **frontend (React UI)** interacts with the **backend (Web API)** to perform JWT authentication.
+
+#### 📁 Project Structure
+
+```
+CollegeApp/
+├── ASPNETCoreWebAPI/              ◀── Backend (Web API)
+│   ├── Controllers/
+│   │   ├── LoginController.cs     ◀── Generates JWT tokens
+│   │   └── StudentController.cs   ◀── Protected with [Authorize]
+│   └── Model/
+│       ├── LoginDTO.cs
+│       └── LoginResponseDTO.cs
+│
+└── student-ui/                    ◀── Frontend (React)
+    └── src/
+        ├── api/
+        │   └── studentApi.js      ◀── API calls + token management
+        ├── components/
+        │   ├── Login.jsx          ◀── Login form UI
+        │   └── StudentList.jsx    ◀── Displays student data
+        └── App.jsx                ◀── Main application
+```
+
+---
+
+#### Step 1: Frontend API Service
+
+Create an API service that handles login and token management:
+
+**studentApi.js – API Service with Token Management:**
+
+```javascript
+// student-ui/src/api/studentApi.js
+import axios from "axios";
+
+// Define API base URLs
+const API_BASE = "https://localhost:7234/api";
+const STUDENT_URL = `${API_BASE}/Student`;
+const LOGIN_URL = `${API_BASE}/Login`;
+
+// Set default headers for all axios requests
+axios.defaults.headers.common["Content-Type"] = "application/json";
+axios.defaults.headers.common["Accept"] = "application/json";
+
+// ========== TOKEN MANAGEMENT FUNCTIONS ==========
+
+/**
+ * Set JWT token in axios default headers
+ * This token will be sent with every subsequent request
+ * @param {string} token - The JWT token received from login
+ */
+export const setToken = (token) => {
+  if (token) {
+    // Add Authorization header with Bearer token
+    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    // Remove Authorization header (for logout)
+    delete axios.defaults.headers.common["Authorization"];
+  }
+};
+
+/**
+ * Get current token from headers
+ * @returns {string|null} The current JWT token or null
+ */
+export const getToken = () => {
+  return (
+    axios.defaults.headers.common["Authorization"]?.replace("Bearer ", "") ||
+    null
+  );
+};
+
+// ========== API FUNCTIONS ==========
+
+/**
+ * Login function - calls the Login API
+ * @param {string} username - User's username
+ * @param {string} password - User's password
+ * @returns {Object} Response containing username and token
+ */
+export const login = async (username, password) => {
+  // POST request to /api/Login with credentials
+  const response = await axios.post(LOGIN_URL, { username, password });
+  return response.data;
+};
+
+/**
+ * Get all students - requires valid JWT token
+ * @returns {Array} List of all students
+ */
+export const getAllStudents = async () => {
+  // GET request to /api/Student/All
+  // Authorization header is automatically added by axios
+  const response = await axios.get(`${STUDENT_URL}/All`);
+  return response.data;
+};
+```
+
+---
+
+#### Step 2: Login Component
+
+Create a React component for the login form:
+
+**Login.jsx – Login Form Component:**
+
+```jsx
+// student-ui/src/components/Login.jsx
+import { useState } from "react";
+import { login, setToken } from "../api/studentApi";
+
+function Login({ onLoginSuccess }) {
+  // State variables for form inputs and UI
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loggedInUser, setLoggedInUser] = useState(null); // Currently logged in user
+  const [error, setError] = useState(""); // Error message
+  const [loading, setLoading] = useState(false); // Loading state
+
+  /**
+   * Handle login button click
+   * Calls the API and stores the token
+   */
+  const handleLogin = async () => {
+    setLoading(true); // Show loading indicator
+    setError(""); // Clear previous errors
+
+    try {
+      // Step 1: Call login API with credentials
+      const response = await login(username, password);
+      console.log("Login response:", response);
+
+      // Step 2: Check if we received a token
+      if (response && response.token) {
+        // Step 3: Store token in axios headers for future requests
+        setToken(response.token);
+
+        // Step 4: Update UI state
+        setLoggedInUser(response.username);
+        setError("");
+
+        // Step 5: Notify parent component (optional)
+        if (onLoginSuccess) {
+          onLoginSuccess(response.username, response.token);
+        }
+      } else {
+        // Handle invalid credentials response
+        const errorMsg =
+          typeof response === "string"
+            ? response
+            : "Invalid username & password";
+        setError(errorMsg);
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      // Extract and display error message
+      let errorMsg = "Login failed";
+      if (err.response?.data) {
+        errorMsg =
+          typeof err.response.data === "string"
+            ? err.response.data
+            : JSON.stringify(err.response.data);
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
+    } finally {
+      setLoading(false); // Hide loading indicator
+    }
+  };
+
+  /**
+   * Handle logout button click
+   * Clears the token and resets state
+   */
+  const handleLogout = () => {
+    setToken(null); // Remove token from headers
+    setLoggedInUser(null); // Clear logged in user
+    setUsername(""); // Clear form inputs
+    setPassword("");
+  };
+
+  // Render login form or logged-in state
+  return (
+    <div className="login-container">
+      {loggedInUser ? (
+        // Show welcome message and logout button when logged in
+        <div className="logged-in">
+          <span className="welcome-text">
+            Welcome, <strong>{loggedInUser}</strong>!
+          </span>
+          <button onClick={handleLogout} className="logout-btn">
+            Logout
+          </button>
+        </div>
+      ) : (
+        // Show login form when not logged in
+        <div className="login-form">
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="login-input"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="login-input"
+          />
+          <button
+            onClick={handleLogin}
+            disabled={loading}
+            className="login-btn"
+          >
+            {loading ? "Logging in..." : "Login"}
+          </button>
+        </div>
+      )}
+      {/* Display error message if any */}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
+export default Login;
+```
+
+---
+
+#### Step 3: Main Application
+
+Integrate login component with your main app:
+
+**App.jsx – Main Application:**
+
+```jsx
+// student-ui/src/App.jsx
+import StudentList from "./components/StudentList";
+import Login from "./components/Login";
+import "./index.css";
+
+function App() {
+  return (
+    <div className="container">
+      <h2>Student API Test UI</h2>
+
+      {/* Login component - handles authentication */}
+      <Login />
+
+      <hr className="divider" />
+
+      {/* StudentList - fetches data using JWT token */}
+      <StudentList />
+    </div>
+  );
+}
+
+export default App;
+```
+
+---
+
+#### 📊 Complete Authentication Flow
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         JWT AUTHENTICATION IN ACTION                          │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────────────┐                        ┌─────────────────────┐      │
+│  │     FRONTEND        │                        │      BACKEND        │      │
+│  │    (React UI)       │                        │     (Web API)       │      │
+│  └─────────────────────┘                        └─────────────────────┘      │
+│                                                                               │
+│  ═══════════════════════ STEP 1: USER LOGIN ════════════════════════════     │
+│                                                                               │
+│  ┌─────────────────────┐   POST /api/Login      ┌─────────────────────┐      │
+│  │  User enters:       │   ─────────────────▶   │  LoginController    │      │
+│  │  Username: Kartik   │   { username,          │                     │      │
+│  │  Password: ****     │     password }         │  • Validates creds  │      │
+│  │                     │                        │  • Generates JWT    │      │
+│  │  login(u, p)        │                        │  • Returns token    │      │
+│  └─────────────────────┘                        └─────────────────────┘      │
+│                                                          │                    │
+│                                                          ▼                    │
+│  ┌─────────────────────┐   200 OK + Token       ┌─────────────────────┐      │
+│  │  Receives response: │   ◀─────────────────   │  {                  │      │
+│  │                     │                        │    username:"Kartik"│      │
+│  │  setToken(token)    │                        │    token:"eyJ..."   │      │
+│  │  (stores in axios)  │                        │  }                  │      │
+│  └─────────────────────┘                        └─────────────────────┘      │
+│                                                                               │
+│  ══════════════ STEP 2: ACCESS PROTECTED RESOURCE ══════════════════════     │
+│                                                                               │
+│  ┌─────────────────────┐   GET /api/Student/All ┌─────────────────────┐      │
+│  │  User clicks:       │   ─────────────────▶   │  StudentController  │      │
+│  │  "Get Students"     │   Headers:             │  [Authorize]        │      │
+│  │                     │   Authorization:       │                     │      │
+│  │  getAllStudents()   │   Bearer eyJhbG...     │  • Validates token  │      │
+│  └─────────────────────┘                        │  • Checks role      │      │
+│                                                 │  • Returns data     │      │
+│                                                 └─────────────────────┘      │
+│                                                          │                    │
+│              Token Valid?  ─────┬─────────────────       │                    │
+│                                 │              │         ▼                    │
+│                              ❌ NO           ✅ YES                           │
+│                                 ▼              │  ┌─────────────────────┐      │
+│                      ┌─────────────────┐       │  │  200 OK + Data      │      │
+│                      │  401 Unauthorized│      │  │  [                  │      │
+│                      │  Access Denied   │      │  │   {id:1, name:...}, │      │
+│                      └─────────────────┘       │  │   {id:2, name:...}  │      │
+│                                                │  │  ]                  │      │
+│                                                │  └─────────────────────┘      │
+│  ┌─────────────────────┐                       │                              │
+│  │  Displays students  │◀──────────────────────┘                              │
+│  │  in a table         │                                                      │
+│  └─────────────────────┘                                                      │
+│                                                                               │
+│  ════════════════════ STEP 3: LOGOUT ═══════════════════════════════════     │
+│                                                                               │
+│  ┌─────────────────────┐                                                      │
+│  │  User clicks:       │                                                      │
+│  │  "Logout"           │                                                      │
+│  │                     │                                                      │
+│  │  setToken(null)     │  ◀── Removes Authorization header                   │
+│  │  (clears token)     │      Future requests will be rejected               │
+│  └─────────────────────┘                                                      │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### 🧪 Testing the Authentication
+
+1. **Start the Backend:** Run the Web API on `https://localhost:7234`
+2. **Start the Frontend:** Run the React app on `http://localhost:5173`
+3. **Test Login:**
+   - Username: `Kartik`
+   - Password: `Kartik@123`
+4. **After successful login:** Click "Get Students" to fetch protected data
+5. **Test Logout:** Click "Logout" and try to fetch students again (will fail with 401)
+
+---
+
+#### 💡 What Happens Behind the Scenes
+
+| Step | Action                  | What Happens                                       |
+| ---- | ----------------------- | -------------------------------------------------- |
+| 1    | User enters credentials | `Login.jsx` captures username & password           |
+| 2    | Click Login             | `studentApi.js` → `login()` → POST to `/api/Login` |
+| 3    | Backend validates       | `LoginController` checks credentials               |
+| 4    | Token generated         | JWT created with username & role claims            |
+| 5    | Token returned          | Response: `{ username, token }`                    |
+| 6    | Token stored            | `setToken(token)` adds to axios headers            |
+| 7    | Access protected API    | GET `/api/Student/All` with `Bearer token`         |
+| 8    | Backend validates token | Middleware checks signature, expiry, role          |
+| 9    | Data returned           | Student list sent if token valid                   |
+| 10   | Logout                  | `setToken(null)` removes Authorization header      |
+
+---
+
+### 🎯 Key Takeaways
+
+1. **Authentication vs Authorization** – Auth verifies WHO you are, Authorization checks WHAT you can do
+2. **JWT is self-contained** – All user info is encoded in the token itself
+3. **Three parts** – Header (algorithm), Payload (user data), Signature (verification)
+4. **Base64 encoded** – JWT is encoded, not encrypted (anyone can read the payload!)
+5. **Signature validates integrity** – Ensures token hasn't been tampered
+6. **Use `[Authorize]`** – Protect your endpoints with role-based authorization
+7. **Store secrets securely** – Never hardcode secrets in code, use configuration
+8. **Middleware order matters** – `UseAuthentication()` must come before `UseAuthorization()`
+9. **Token generation** – Use `JwtSecurityTokenHandler` with claims and signing credentials
+10. **Frontend token storage** – Store token in axios headers for automatic inclusion in requests
+
+> ⚠️ **Security Note:** JWT payload is only encoded (Base64), not encrypted. Never store sensitive data like passwords in the payload!
+
 ⬆️ [Back to Table of Contents](#-table-of-contents)
 
 ---
@@ -5474,9 +6083,11 @@ You've learned:
 - ✅ CORS scenarios (Simple Request, Preflight Request, Credentials)
 - ✅ Multiple ways to enable CORS in ASP.NET Core Web API
 - ✅ JWT (JSON Web Tokens) for secure API authentication
-- ✅ JWT structure (Header, Payload, Signature) and token generation
+- ✅ JWT structure (Header, Payload, Signature) and token generation process
 - ✅ JWT algorithms and how to configure JWT in ASP.NET Core
 - ✅ Protecting controllers with `[Authorize]` attribute
+- ✅ Generating JWT tokens with `JwtSecurityTokenHandler` and claims
+- ✅ Complete frontend-backend JWT authentication flow (React + Web API)
 
 **Happy Coding!** 🚀
 
