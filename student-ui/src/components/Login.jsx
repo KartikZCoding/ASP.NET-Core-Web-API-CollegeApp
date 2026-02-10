@@ -4,6 +4,7 @@ import { login, setToken } from "../api/studentApi";
 function Login({ onLoginSuccess }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [policy, setPolicy] = useState("Local");
   const [loggedInUser, setLoggedInUser] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,9 +19,7 @@ function Login({ onLoginSuccess }) {
     setError("");
 
     try {
-      // const response = await login("Micorosot", username, password); // for microsoft btn
-      // const response = await login("Google", username, password);
-      const response = await login("Local", username, password); // for get student btn
+      const response = await login(policy, username, password);
       console.log("Login response:", response);
 
       if (response && response.token) {
@@ -93,6 +92,15 @@ function Login({ onLoginSuccess }) {
             onChange={(e) => setPassword(e.target.value)}
             className="login-input"
           />
+          <select
+            value={policy}
+            onChange={(e) => setPolicy(e.target.value)}
+            className="login-input"
+          >
+            <option value="Local">Local</option>
+            <option value="Microsoft">Microsoft</option>
+            <option value="Google">Google</option>
+          </select>
           <button
             onClick={handleLogin}
             disabled={loading}
