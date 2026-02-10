@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace ASPNETCoreWebAPI.Controllers
@@ -23,11 +24,11 @@ namespace ASPNETCoreWebAPI.Controllers
         //private readonly ICollegeRepository<Student> _studentRepository;
         //table specific repository
         private readonly IStudentRepository _studentRepository;
-
         //automapper
         private readonly IMapper _mapper;
-
         private readonly ILogger<StudentController> _logger;
+        //common API response
+        private readonly APIResponse _apiResponse;
 
         //common repository
         //public StudentController(ILogger<StudentController> logger, IMapper mapper, ICollegeRepository<Student> studentRepository)
@@ -37,22 +38,36 @@ namespace ASPNETCoreWebAPI.Controllers
             _logger = logger;
             _mapper = mapper;
             _studentRepository = studentRepository;
+            _apiResponse = new();
         }
 
         [HttpGet]
         [Route("All", Name = "GetAllStudents")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         //[AllowAnonymous]
-        public async Task<ActionResult<IEnumerable<StudentDTO>>> GetStudentsAsync()
+        public async Task<ActionResult<APIResponse>> GetStudentsAsync()
         {
-            _logger.LogInformation("Get all the student.");
+            try
+            {
+                _logger.LogInformation("Get all the student.");
 
-            var students = await _studentRepository.GetAllAsync();
+                var students = await _studentRepository.GetAllAsync();
 
-            //automatic copy data one class to another class
-            var studentDTOData = _mapper.Map<List<StudentDTO>>(students);
+                //automatic copy data one class to another class
+                //use APIResponse common api
+                _apiResponse.Data = _mapper.Map<List<StudentDTO>>(students);
+                _apiResponse.Status = true;
+                _apiResponse.StatusCode = HttpStatusCode.OK;
 
-            return Ok(studentDTOData);
+                return Ok(_apiResponse);
+            }
+            catch (Exception ex)
+            {
+                _apiResponse.Errors.Add(ex.Message);
+                _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+                _apiResponse.Status = false;
+                return _apiResponse;
+            }
         }
 
         [HttpGet]
@@ -63,25 +78,37 @@ namespace ASPNETCoreWebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<StudentDTO>> GetStudentByIdAsync(int id)
+        public async Task<ActionResult<APIResponse>> GetStudentByIdAsync(int id)
         {
-            if (id <= 0)
+            try
             {
-                _logger.LogWarning("give a valid Id!");
-                return BadRequest();
-            }
+                if (id <= 0)
+                {
+                    _logger.LogWarning("give a valid Id!");
+                    return BadRequest();
+                }
 
-            var student = await _studentRepository.GetAsync(student => student.Id == id);
-            if (student == null)
+                var student = await _studentRepository.GetAsync(student => student.Id == id);
+                if (student == null)
+                {
+                    _logger.LogError("given id student not found!");
+                    return NotFound($"The student with id {id} not found!.");
+                }
+
+                //create a studentDTO here.
+                _apiResponse.Data = _mapper.Map<StudentDTO>(student);
+                _apiResponse.Status = true;
+                _apiResponse.StatusCode = HttpStatusCode.OK;
+
+                return Ok(_apiResponse);
+            }
+            catch (Exception ex)
             {
-                _logger.LogError("given id student not found!");
-                return NotFound($"The student with id {id} not found!.");
+                _apiResponse.Errors.Add(ex.Message);
+                _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+                _apiResponse.Status = false;
+                return _apiResponse;
             }
-
-            //create a studentDTO here.
-            var studentDTO = _mapper.Map<StudentDTO>(student);
-
-            return Ok(studentDTO);
         }
 
         [HttpGet("{name:alpha}", Name = "GetStudentByName")]
@@ -91,19 +118,32 @@ namespace ASPNETCoreWebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<StudentDTO>> GetStudentByNameAsync(string name)
+        public async Task<ActionResult<APIResponse>> GetStudentByNameAsync(string name)
         {
-            if (string.IsNullOrEmpty(name))
-                return BadRequest();
 
-            var student = await _studentRepository.GetAsync(student => student.StudentName.ToLower().Contains(name.ToLower()));
-            if (student == null)
-                return NotFound($"The student with name {name} not found!.");
+            try
+            {
+                if (string.IsNullOrEmpty(name))
+                    return BadRequest();
 
-            //create a studentDTO here.
-            var studentDTO = _mapper.Map<StudentDTO>(student);
+                var student = await _studentRepository.GetAsync(student => student.StudentName.ToLower().Contains(name.ToLower()));
+                if (student == null)
+                    return NotFound($"The student with name {name} not found!.");
 
-            return Ok(studentDTO);
+                //create a studentDTO here.
+                _apiResponse.Data = _mapper.Map<StudentDTO>(student);
+                _apiResponse.Status = true;
+                _apiResponse.StatusCode = HttpStatusCode.OK;
+
+                return Ok(_apiResponse);
+            }
+            catch (Exception ex)
+            {
+                _apiResponse.Errors.Add(ex.Message);
+                _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+                _apiResponse.Status = false;
+                return _apiResponse;
+            }
         }
 
         [HttpPost]
@@ -113,18 +153,32 @@ namespace ASPNETCoreWebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<StudentDTO>> CreateStudentAsync([FromBody] StudentDTO dto)
+        public async Task<ActionResult<APIResponse>> CreateStudentAsync([FromBody] StudentDTO dto)
         {
-            if (dto == null)
-                return BadRequest();
+            try
+            {
+                if (dto == null)
+                    return BadRequest();
 
-            Student student = _mapper.Map<Student>(dto);
+                Student student = _mapper.Map<Student>(dto);
 
-            var studentAfterCreate = await _studentRepository.CreateAsync(student);
+                var studentAfterCreate = await _studentRepository.CreateAsync(student);
 
-            dto.Id = studentAfterCreate.Id;
+                dto.Id = studentAfterCreate.Id;
 
-            return CreatedAtRoute("GetStudentById", new { id = dto.Id }, dto);
+                _apiResponse.Data = dto;
+                _apiResponse.Status = true;
+                _apiResponse.StatusCode = HttpStatusCode.OK;
+
+                return CreatedAtRoute("GetStudentById", new { id = dto.Id }, _apiResponse);
+            }
+            catch (Exception ex)
+            {
+                _apiResponse.Errors.Add(ex.Message);
+                _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+                _apiResponse.Status = false;
+                return _apiResponse;
+            }
         }
 
         [HttpPut]
@@ -135,21 +189,31 @@ namespace ASPNETCoreWebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult> UpdateStudentAsync([FromBody] StudentDTO dto)
+        public async Task<ActionResult<APIResponse>> UpdateStudentAsync([FromBody] StudentDTO dto)
         {
-            if (dto == null || dto.Id <= 0)
-                return BadRequest();
+            try
+            {
+                if (dto == null || dto.Id <= 0)
+                    return BadRequest();
 
-            var existingStudent = await _studentRepository.GetAsync(student => student.Id == dto.Id, true);
+                var existingStudent = await _studentRepository.GetAsync(student => student.Id == dto.Id, true);
 
-            if (existingStudent == null)
-                return NotFound();
+                if (existingStudent == null)
+                    return NotFound();
 
-            var newRecord = _mapper.Map<Student>(dto);
+                var newRecord = _mapper.Map<Student>(dto);
 
-            await _studentRepository.UpdateAsync(newRecord);
+                await _studentRepository.UpdateAsync(newRecord);
 
-            return NoContent();
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _apiResponse.Errors.Add(ex.Message);
+                _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+                _apiResponse.Status = false;
+                return _apiResponse;
+            }
         }
 
         [HttpPatch]
@@ -160,28 +224,39 @@ namespace ASPNETCoreWebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult> UpdateStudentPartialAsync(int id, [FromBody] JsonPatchDocument<StudentDTO> patchDocument)
+        public async Task<ActionResult<APIResponse>> UpdateStudentPartialAsync(int id, [FromBody] JsonPatchDocument<StudentDTO> patchDocument)
         {
-            if (patchDocument == null || id <= 0)
-                return BadRequest();
 
-            var existingStudent = await _studentRepository.GetAsync(student => student.Id == id, true);
+            try
+            {
+                if (patchDocument == null || id <= 0)
+                    return BadRequest();
 
-            if (existingStudent == null)
-                return NotFound();
+                var existingStudent = await _studentRepository.GetAsync(student => student.Id == id, true);
 
-            var studentDTO = _mapper.Map<StudentDTO>(existingStudent);
+                if (existingStudent == null)
+                    return NotFound();
 
-            patchDocument.ApplyTo(studentDTO, ModelState);
+                var studentDTO = _mapper.Map<StudentDTO>(existingStudent);
 
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+                patchDocument.ApplyTo(studentDTO, ModelState);
 
-            existingStudent = _mapper.Map<Student>(studentDTO);
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
 
-            await _studentRepository.UpdateAsync(existingStudent);
+                existingStudent = _mapper.Map<Student>(studentDTO);
 
-            return NoContent();
+                await _studentRepository.UpdateAsync(existingStudent);
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _apiResponse.Errors.Add(ex.Message);
+                _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+                _apiResponse.Status = false;
+                return _apiResponse;
+            }
         }
 
         [HttpDelete("{id}", Name = "DeleteStudentById")]
@@ -191,18 +266,32 @@ namespace ASPNETCoreWebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<bool>> DeleteStudentAsync(int id)
+        public async Task<ActionResult<APIResponse>> DeleteStudentAsync(int id)
         {
-            if (id <= 0)
-                return BadRequest();
+            try
+            {
+                if (id <= 0)
+                    return BadRequest();
 
-            var student = await _studentRepository.GetAsync(student => student.Id == id, false);
-            if (student == null)
-                return NotFound($"The student with id {id} not found!.");
+                var student = await _studentRepository.GetAsync(student => student.Id == id, false);
+                if (student == null)
+                    return NotFound($"The student with id {id} not found!.");
 
-            await _studentRepository.DeleteAsync(student);
+                await _studentRepository.DeleteAsync(student);
 
-            return Ok(true);
+                _apiResponse.Data = true;
+                _apiResponse.Status = true;
+                _apiResponse.StatusCode = HttpStatusCode.OK;
+
+                return Ok(_apiResponse);
+            }
+            catch (Exception ex)
+            {
+                _apiResponse.Errors.Add(ex.Message);
+                _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+                _apiResponse.Status = false;
+                return _apiResponse;
+            }
         }
 
     }
