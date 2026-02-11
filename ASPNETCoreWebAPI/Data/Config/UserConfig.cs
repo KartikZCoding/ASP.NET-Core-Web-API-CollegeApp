@@ -15,10 +15,15 @@ namespace ASPNETCoreWebAPI.Data.Config
             builder.Property(x => x.Username).IsRequired();
             builder.Property(x => x.Password).IsRequired();
             builder.Property(x => x.PasswordSalt).IsRequired();
-            builder.Property(x => x.UserType).IsRequired();
+            builder.Property(x => x.UserTypeId).IsRequired();
             builder.Property(x => x.IsActive).IsRequired();
             builder.Property(x => x.IsDeleted).IsRequired();
             builder.Property(x => x.CreatedDate).IsRequired();
+
+            builder.HasOne(n => n.UserType)
+                .WithMany(n => n.Users)
+                .HasForeignKey(n => n.UserTypeId)
+                .HasConstraintName("FK_Users_UserType");
         }
     }
 }
