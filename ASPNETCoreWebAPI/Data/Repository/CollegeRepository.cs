@@ -48,7 +48,7 @@ namespace ASPNETCoreWebAPI.Data.Repository
                 return await _dbset.AsNoTracking().Where(filter).FirstOrDefaultAsync();
             else
                 return await _dbset.Where(filter).FirstOrDefaultAsync();
-        }
+        }   
 
         // this not used in repository because upper method is use for all filter byname, byid, by any thing you want.
         //public async Task<T> GetByNameAsync(Expression<Func<T, bool>> filter)
