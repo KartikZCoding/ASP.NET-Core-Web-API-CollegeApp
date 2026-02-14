@@ -3,6 +3,7 @@ using ASPNETCoreWebAPI.Data;
 using ASPNETCoreWebAPI.Data.Repository;
 using ASPNETCoreWebAPI.EFDBFirst;
 using ASPNETCoreWebAPI.MyLogging;
+using ASPNETCoreWebAPI.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +51,7 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddScoped<IMyLogger, LogToMemoryServer>();
 builder.Services.AddScoped<IStudentRepository, StudentRepository>();
 builder.Services.AddScoped(typeof(ICollegeRepository<>), typeof(CollegeRepository<>));
+builder.Services.AddScoped<IUserService, UserService>();
 
 //Log.Logger = new LoggerConfiguration()
 //    .MinimumLevel.Information()
