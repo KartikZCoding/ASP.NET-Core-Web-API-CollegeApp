@@ -41,9 +41,47 @@ namespace ASPNETCoreWebAPI.Controllers
             _apiResponse = new();
         }
 
+        [HttpPost]
+        [Route("Create")]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<APIResponse>> CreateStudentAsync([FromBody] StudentDTO dto)
+        {
+            try
+            {
+                if (dto == null)
+                    return BadRequest();
+
+                Student student = _mapper.Map<Student>(dto);
+
+                var studentAfterCreate = await _studentRepository.CreateAsync(student);
+
+                dto.Id = studentAfterCreate.Id;
+
+                _apiResponse.Data = dto;
+                _apiResponse.Status = true;
+                _apiResponse.StatusCode = HttpStatusCode.OK;
+
+                return CreatedAtRoute("GetStudentById", new { id = dto.Id }, _apiResponse);
+            }
+            catch (Exception ex)
+            {
+                _apiResponse.Errors.Add(ex.Message);
+                _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+                _apiResponse.Status = false;
+                return _apiResponse;
+            }
+        }
+
         [HttpGet]
         [Route("All", Name = "GetAllStudents")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         //[AllowAnonymous]
         public async Task<ActionResult<APIResponse>> GetStudentsAsync()
         {
@@ -136,41 +174,6 @@ namespace ASPNETCoreWebAPI.Controllers
                 _apiResponse.StatusCode = HttpStatusCode.OK;
 
                 return Ok(_apiResponse);
-            }
-            catch (Exception ex)
-            {
-                _apiResponse.Errors.Add(ex.Message);
-                _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
-                _apiResponse.Status = false;
-                return _apiResponse;
-            }
-        }
-
-        [HttpPost]
-        [Route("Create")]
-        [ProducesResponseType(StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<APIResponse>> CreateStudentAsync([FromBody] StudentDTO dto)
-        {
-            try
-            {
-                if (dto == null)
-                    return BadRequest();
-
-                Student student = _mapper.Map<Student>(dto);
-
-                var studentAfterCreate = await _studentRepository.CreateAsync(student);
-
-                dto.Id = studentAfterCreate.Id;
-
-                _apiResponse.Data = dto;
-                _apiResponse.Status = true;
-                _apiResponse.StatusCode = HttpStatusCode.OK;
-
-                return CreatedAtRoute("GetStudentById", new { id = dto.Id }, _apiResponse);
             }
             catch (Exception ex)
             {
