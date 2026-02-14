@@ -54,6 +54,23 @@ A comprehensive guide to understanding Web APIs, their evolution, and practical 
     32.5. [Getting RolePrivilege by Id & Name](#325-getting-roleprivilege-by-id--name)
     32.6. [Updating a RolePrivilege](#326-updating-a-roleprivilege)
     32.7. [Deleting a RolePrivilege](#327-deleting-a-roleprivilege)
+33. [Service Layer in Web API](#33-service-layer-in-web-api)
+    33.1. [Creating the Interface – IUserService](#331-creating-the-interface--iuserservice)
+    33.2. [Creating the Implementation – UserService](#332-creating-the-implementation--userservice)
+    33.3. [Registering the Service in DI](#333-registering-the-service-in-di)
+    33.4. [Consuming the Service from Controller](#334-consuming-the-service-from-controller)
+    33.5. [UserDTO and UserReadonlyDTO](#335-userdto-and-userreadonlydto)
+34. [Create Password Hash with Salt in Web API](#34-create-password-hash-with-salt-in-web-api)
+    34.1. [Implementation – CreatePasswordHashWithSalt](#341-implementation--createpasswordhashwithsalt)
+    34.2. [Using Password Hashing in Create & Update](#342-using-password-hashing-in-create--update)
+    34.3. [What Gets Stored in the Database?](#343-what-gets-stored-in-the-database)
+35. [Create, Read, Update, Delete Users (CRUD) Endpoints in Web API](#35-create-read-update-delete-users-crud-endpoints-in-web-api)
+    35.1. [UserController Setup](#351-usercontroller-setup)
+    35.2. [Create User Endpoint](#352-create-user-endpoint)
+    35.3. [Get All Users Endpoint](#353-get-all-users-endpoint)
+    35.4. [Get User by ID & Name](#354-get-user-by-id--name)
+    35.5. [Update User Endpoint](#355-update-user-endpoint)
+    35.6. [Delete User Endpoint (Soft Delete)](#356-delete-user-endpoint-soft-delete)
 
 ---
 
@@ -8213,6 +8230,870 @@ public async Task<ActionResult<APIResponse>> DeleteRoleAsync(int id)
 
 ---
 
+## 33. Service Layer in Web API
+
+### 🤔 Why Do We Need a Service Layer?
+
+Until now, all our **business logic** has been written directly inside the **controllers**. While this works for small projects, it creates several problems as the application grows:
+
+```
+❌ Current Approach: Business Logic Inside Controller
+┌───────────────────────────────────────────────────┐
+│                  Controller                       │
+│  ┌─────────────────────────────────────────────┐  │
+│  │  Validation Logic                           │  │
+│  │  Password Hashing Logic                     │  │
+│  │  Duplicate Check Logic                      │  │
+│  │  Mapping Logic                              │  │
+│  │  Database Operations (via Repository)       │  │
+│  │  Response Formatting                        │  │
+│  └─────────────────────────────────────────────┘  │
+│  ⚠️ Controller doing TOO MUCH!                    │
+└───────────────────────────────────────────────────┘
+```
+
+**Problems with putting business logic in controllers:**
+
+| Problem             | Description                                                                                                 |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Fat Controllers** | Controllers become bloated with hundreds of lines of code — hard to read and maintain                       |
+| **No Reusability**  | If two controllers need the same logic (e.g., password hashing), you have to **copy-paste** the code        |
+| **Hard to Test**    | You can't unit-test business logic independently — you'd need to mock the entire HTTP pipeline              |
+| **Violates SRP**    | The controller has **two responsibilities**: handling HTTP requests AND executing business logic            |
+| **Tight Coupling**  | Business rules are tied to the web framework — can't reuse in a console app, background job, or another API |
+
+> 💡 **SRP (Single Responsibility Principle)** from SOLID design says a class should have **only one reason to change**. A controller should only handle HTTP concerns (routing, status codes, request/response). Business logic belongs elsewhere.
+
+---
+
+### ✅ The Solution: Service Layer Pattern
+
+The **Service Layer** sits **between the Controller and the Repository**. It contains all the business logic, while the controller becomes a thin wrapper that handles HTTP concerns only.
+
+```
+✅ Clean Architecture with Service Layer
+
+  HTTP Request
+       │
+       ▼
+┌──────────────────┐
+│    Controller     │  ← Handles HTTP (routing, status codes, validation)
+│  (Thin Layer)     │
+└────────┬─────────┘
+         │  calls
+         ▼
+┌──────────────────┐
+│   Service Layer   │  ← Contains ALL business logic
+│  (Business Logic) │     (password hashing, duplicate checks, mapping)
+└────────┬─────────┘
+         │  calls
+         ▼
+┌──────────────────┐
+│   Repository      │  ← Handles ONLY database operations (CRUD)
+│  (Data Access)    │
+└──────────────────┘
+```
+
+**Benefits of the Service Layer:**
+
+| Benefit                    | Description                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| **Separation of Concerns** | Controller handles HTTP, Service handles logic, Repository handles data          |
+| **Reusability**            | Multiple controllers (or background jobs) can call the same service method       |
+| **Testability**            | Unit test business logic by mocking only the repository — no HTTP dependency     |
+| **Maintainability**        | Logic changes in one place — the service class — without touching the controller |
+| **Clean Controllers**      | Controllers become thin and easy to read                                         |
+
+---
+
+### 🛠️ Creating the Service Layer
+
+We follow the same **interface + implementation** pattern used throughout the project (just like DI and Repository):
+
+1. **Create an interface** (`IUserService`) — defines the contract
+2. **Create a class** (`UserService`) — implements the business logic
+3. **Register in DI** — add `Scoped` registration in `Program.cs`
+4. **Inject into Controller** — controller calls service methods instead of writing logic directly
+
+---
+
+### 3️⃣3️⃣.1️⃣ Creating the Interface – `IUserService`
+
+The interface defines **what** the service can do, not **how** it does it:
+
+**`Services/IUserService.cs`:**
+
+```csharp
+using ASPNETCoreWebAPI.Model;
+
+namespace ASPNETCoreWebAPI.Services
+{
+    public interface IUserService
+    {
+        Task<bool> CreateUserAsync(UserDTO dto);
+        Task<List<UserReadonlyDTO>> GetUsersAsync();
+        Task<UserReadonlyDTO> GetUserById(int id);
+        Task<UserReadonlyDTO> GetUserByName(string username);
+        Task<bool> UpdateUserAsync(UserDTO dto);
+        Task<bool> DeleteUserAsync(int userId);
+        (string PasswordHash, string Salt) CreatePasswordHashWithSalt(string password);
+    }
+}
+```
+
+> 🔑 **Key Points:**
+>
+> - Returns `UserReadonlyDTO` for Read operations — hides password from API consumers
+> - Accepts `UserDTO` for Create/Update — includes password field for hashing
+> - `CreatePasswordHashWithSalt` returns a **C# tuple** `(string PasswordHash, string Salt)` — both values in one return
+> - All async methods follow the `Task<T>` pattern for non-blocking I/O
+
+---
+
+### 3️⃣3️⃣.2️⃣ Creating the Implementation – `UserService`
+
+The service class implements all the business logic. It **depends on the repository** (for DB operations) and **AutoMapper** (for entity-DTO conversion):
+
+**`Services/UserService.cs`:**
+
+```csharp
+using ASPNETCoreWebAPI.Data;
+using ASPNETCoreWebAPI.Data.Repository;
+using ASPNETCoreWebAPI.Model;
+using AutoMapper;
+using Microsoft.AspNetCore.Cryptography.KeyDerivation;
+using System.Security.Cryptography;
+
+namespace ASPNETCoreWebAPI.Services
+{
+    public class UserService : IUserService
+    {
+        private readonly ICollegeRepository<User> _userRepository;
+        private readonly IMapper _mapper;
+
+        public UserService(ICollegeRepository<User> userRepository, IMapper mapper)
+        {
+            _userRepository = userRepository;
+            _mapper = mapper;
+        }
+    }
+}
+```
+
+> 📌 **Notice:**
+>
+> - `UserService` depends on `ICollegeRepository<User>` (not the concrete class) — **loose coupling** via DI
+> - Both dependencies are injected through the constructor — same pattern as controllers
+> - The service class is the **only place** where business logic lives
+
+---
+
+### 3️⃣3️⃣.3️⃣ Registering the Service in DI
+
+Just like repositories, services must be registered in `Program.cs` for Dependency Injection to resolve them:
+
+**`Program.cs` — Service Registration:**
+
+```csharp
+builder.Services.AddScoped<IUserService, UserService>();
+```
+
+> 💡 **`AddScoped`** creates one service instance **per HTTP request**. This means:
+>
+> - Each request gets a fresh `UserService` instance
+> - The same instance is shared within a single request's pipeline
+> - This is the recommended lifetime for services that depend on database context (also scoped)
+
+```
+DI Registration Summary in Program.cs:
+┌───────────────────────────────────────────────────┐
+│  builder.Services.AddScoped<IMyLogger, ...>();     │  ← Logging
+│  builder.Services.AddScoped<IStudentRepository,   │
+│                              StudentRepository>();│  ← Repository
+│  builder.Services.AddScoped(typeof(               │
+│      ICollegeRepository<>),                       │
+│      typeof(CollegeRepository<>));                │  ← Generic Repo
+│  builder.Services.AddScoped<IUserService,         │
+│                              UserService>();      │  ← Service Layer ✅
+└───────────────────────────────────────────────────┘
+```
+
+---
+
+### 3️⃣3️⃣.4️⃣ Consuming the Service from Controller
+
+Now the controller becomes **thin** — it only handles HTTP concerns and delegates everything to the service:
+
+**Before (Fat Controller):**
+
+```
+Controller:
+  1. Validate input
+  2. Check duplicate username
+  3. Map DTO → Entity
+  4. Hash the password
+  5. Set audit fields (CreatedDate, IsDeleted)
+  6. Save to database via repository
+  7. Build and return response
+```
+
+**After (Thin Controller with Service Layer):**
+
+```
+Controller:                        Service:
+  1. Call service method      →     1. Validate input
+  2. Build and return         ←     2. Check duplicate username
+     response                       3. Map DTO → Entity
+                                    4. Hash the password
+                                    5. Set audit fields
+                                    6. Save to database
+                                    7. Return result
+```
+
+> 🔑 **The controller now only has 2 jobs:** Call the service + Format the HTTP response. All logic is in the service!
+
+---
+
+### 3️⃣3️⃣.5️⃣ UserDTO and UserReadonlyDTO
+
+Two separate DTOs are used for different operations:
+
+```
+User Entity (DB)              UserDTO (Create/Update)     UserReadonlyDTO (Read)
+┌─────────────────┐           ┌────────────────┐          ┌────────────────┐
+│ Id              │──────────▶│ Id             │─────────▶│ Id             │
+│ Username        │──────────▶│ Username ✅    │─────────▶│ Username  ✅   │
+│ Password        │──────────▶│ Password ✅    │    ✖     │                │
+│ PasswordSalt    │    ✖      │                │    ✖     │                │
+│ UserTypeId      │──────────▶│ UserTypeId ✅  │─────────▶│ UserTypeId ✅  │
+│ IsActive        │──────────▶│ IsActive ✅    │─────────▶│ IsActive  ✅   │
+│ IsDeleted       │    ✖      │                │    ✖     │                │
+│ CreatedDate     │    ✖      │                │    ✖     │                │
+│ ModifiedDate    │    ✖      │                │    ✖     │                │
+└─────────────────┘           └────────────────┘          └────────────────┘
+```
+
+**`Model/UserDTO.cs`** — Used for **Create** and **Update** operations (contains password):
+
+```csharp
+namespace ASPNETCoreWebAPI.Model
+{
+    public class UserDTO
+    {
+        public int Id { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public bool IsActive { get; set; }
+        public int UserTypeId { get; set; }
+    }
+}
+```
+
+**`Model/UserReadonlyDTO.cs`** — Used for **Read** operations (hides password):
+
+```csharp
+namespace ASPNETCoreWebAPI.Model
+{
+    public class UserReadonlyDTO
+    {
+        public int Id { get; set; }
+        public string Username { get; set; }
+        public bool IsActive { get; set; }
+        public int UserTypeId { get; set; }
+    }
+}
+```
+
+> 🔑 **Why two DTOs?**
+>
+> - `UserDTO` includes `Password` — needed when the client **sends** data (create/update)
+> - `UserReadonlyDTO` **hides** `Password` — used when the server **returns** data (read)
+> - Neither DTO exposes `PasswordSalt`, `IsDeleted`, `CreatedDate`, or `ModifiedDate` — these are internal server fields
+
+**AutoMapper mappings in `AutoMapperConfig.cs`:**
+
+```csharp
+CreateMap<UserDTO, User>().ReverseMap();
+CreateMap<UserReadonlyDTO, User>().ReverseMap();
+```
+
+---
+
+### 🎯 Service Layer Key Takeaways
+
+1. **Service Layer** sits between Controller and Repository — contains all business logic
+2. **Controllers become thin** — only handle HTTP concerns (routing, status codes, responses)
+3. **Interface + Implementation** pattern (`IUserService` / `UserService`) enables DI and testability
+4. **Register as Scoped** in `Program.cs` — matches the repository and DbContext lifetimes
+5. **Two DTOs** — `UserDTO` for input (with password) and `UserReadonlyDTO` for output (without password)
+6. **Reusability** — same service can be consumed by multiple controllers or background services
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
+## 34. Create Password Hash with Salt in Web API
+
+### 🔐 Why Do We Need Password Hashing?
+
+Storing passwords as **plain text** in the database is one of the most dangerous security mistakes. If the database is compromised (through SQL injection, backup leak, or insider threat), every user's password is exposed.
+
+```
+❌ Plain Text Storage (DANGEROUS!)
+┌─────────────────────────────────────┐
+│  Users Table                        │
+│  ┌────────┬─────────────┐           │
+│  │ User   │ Password    │           │
+│  ├────────┼─────────────┤           │
+│  │ admin  │ admin123    │  ← Visible!
+│  │ john   │ mypassword  │  ← Exposed!
+│  │ alice  │ secret456   │  ← Stolen!
+│  └────────┴─────────────┘           │
+└─────────────────────────────────────┘
+```
+
+**Hashing** converts the password into a fixed-length, irreversible string. Even if an attacker gets the database, they **cannot reverse** the hash to get the original password.
+
+---
+
+### 🧂 What is Salt and Why Do We Need It?
+
+A **salt** is a random value that is generated and added to the password **before** hashing. Without salt, two users with the same password would produce the **same hash** — making the system vulnerable to **rainbow table attacks** (precomputed tables of common password hashes).
+
+```
+Without Salt (Vulnerable):
+  "password123" → hash("password123") → "abc123xyz..."
+  "password123" → hash("password123") → "abc123xyz..."  ← Same hash! 🚨
+
+With Salt (Secure):
+  "password123" + salt1 → hash("password123" + "r4nd0m1") → "qwe789asd..."
+  "password123" + salt2 → hash("password123" + "x8k2m5")  → "jkl456fgh..."  ← Different hash! ✅
+```
+
+> 💡 **Key Insight:** Even identical passwords produce **completely different hashes** when different salts are used. This makes precomputed attacks useless.
+
+---
+
+### 🔑 How Password Hashing with Salt Works
+
+The process involves two parts: **Creating** the hash (during user registration/update) and **Verifying** it (during login).
+
+```
+Creating a Password Hash:
+┌────────────┐     ┌──────────────────┐     ┌──────────────┐
+│  Password   │     │  Generate Salt    │     │  PBKDF2      │
+│ "myPass123" │ ──▶ │  (Random 16 bytes)│ ──▶ │  Algorithm   │
+│             │     │  "a8f3k2..."      │     │  (10,000     │
+└─────────────┘     └──────────────────┘     │   iterations)│
+                                              └──────┬───────┘
+                                                     │
+                           ┌─────────────────────────┘
+                           ▼
+                    ┌──────────────┐
+                    │  Store Both   │
+                    │  in Database  │
+                    │              │
+                    │  Password:    │  ← Hashed (irreversible)
+                    │  "x7k9m2..."  │
+                    │  PasswordSalt:│  ← Salt (needed for verify)
+                    │  "a8f3k2..."  │
+                    └──────────────┘
+```
+
+---
+
+### 🛠️ What is PBKDF2?
+
+**PBKDF2** (Password-Based Key Derivation Function 2) is a standard algorithm for hashing passwords. It is recommended by NIST (National Institute of Standards and Technology) and is built into .NET via `Microsoft.AspNetCore.Cryptography.KeyDerivation`.
+
+| Parameter             | Value in Our Code               | Purpose                                                 |
+| --------------------- | ------------------------------- | ------------------------------------------------------- |
+| **password**          | User's plain text password      | The input to hash                                       |
+| **salt**              | 128-bit (16 bytes) random value | Makes each hash unique                                  |
+| **prf**               | `HMACSHA256`                    | Hash algorithm used internally                          |
+| **iterationCount**    | `10000`                         | Number of times algorithm runs (slows down brute force) |
+| **numBytesRequested** | `256 / 8` = 32 bytes            | Length of the output hash                               |
+
+> 🔑 **Why 10,000 iterations?** Each iteration makes the hash computation slower. If an attacker tries to brute-force passwords, they need to run 10,000 iterations **per guess**. Trying 1 billion passwords would take ~10,000× longer than with a simple hash.
+
+---
+
+### 3️⃣4️⃣.1️⃣ Implementation – `CreatePasswordHashWithSalt`
+
+This method lives inside the `UserService` (our service layer). It generates a random salt, then uses PBKDF2 to hash the password with that salt:
+
+**`Services/UserService.cs` — Password Hashing Method:**
+
+```csharp
+public (string PasswordHash, string Salt) CreatePasswordHashWithSalt(string password)
+{
+    //Create a Salt
+    var salt = new byte[128 / 8];
+    using (var rng = RandomNumberGenerator.Create())
+    {
+        rng.GetBytes(salt);
+    }
+
+    //Create PasswordHash
+    var hash = Convert.ToBase64String(KeyDerivation.Pbkdf2(
+        password: password,
+        salt = salt,
+        prf: KeyDerivationPrf.HMACSHA256,
+        iterationCount: 10000,
+        numBytesRequested: 256 / 8
+        ));
+
+
+    return (hash, Convert.ToBase64String(salt));
+}
+```
+
+**Step-by-step breakdown:**
+
+| Step | Code                             | What It Does                                                      |
+| ---- | -------------------------------- | ----------------------------------------------------------------- |
+| 1    | `new byte[128 / 8]`              | Creates a 16-byte (128-bit) array for the salt                    |
+| 2    | `RandomNumberGenerator.Create()` | Creates a **cryptographically secure** random number generator    |
+| 3    | `rng.GetBytes(salt)`             | Fills the salt array with random bytes                            |
+| 4    | `KeyDerivation.Pbkdf2(...)`      | Runs PBKDF2 with the password + salt for 10,000 iterations        |
+| 5    | `Convert.ToBase64String(...)`    | Converts raw bytes to a Base64 string (safe for database storage) |
+| 6    | `return (hash, salt)`            | Returns both the hash and salt as a **C# tuple**                  |
+
+> 📌 **Important:** `RandomNumberGenerator` from `System.Security.Cryptography` is **cryptographically secure** — unlike `Random`, which is predictable and should **never** be used for security purposes.
+
+---
+
+### 3️⃣4️⃣.2️⃣ Using Password Hashing in Create & Update
+
+The `UserService` calls `CreatePasswordHashWithSalt` during **user creation** and **user update** to hash the password before saving:
+
+**In `CreateUserAsync`:**
+
+```csharp
+if (!string.IsNullOrEmpty(dto.Password))
+{
+    var passwordHash = CreatePasswordHashWithSalt(dto.Password);
+    user.Password = passwordHash.PasswordHash;
+    user.PasswordSalt = passwordHash.Salt;
+}
+```
+
+**In `UpdateUserAsync`:**
+
+```csharp
+if (!string.IsNullOrEmpty(dto.Password))
+{
+    var passwordHash = CreatePasswordHashWithSalt(dto.Password);
+    userToUpdate.Password = passwordHash.PasswordHash;
+    userToUpdate.PasswordSalt = passwordHash.Salt;
+}
+```
+
+> 🔑 The `!string.IsNullOrEmpty(dto.Password)` check is important — during an update, if the client doesn't send a password, we **don't overwrite** the existing hash. This allows updating other user fields without requiring a new password.
+
+---
+
+### 3️⃣4️⃣.3️⃣ What Gets Stored in the Database?
+
+After hashing, the `Users` table stores the hash and salt — **never** the original password:
+
+```
+Users Table in Database:
+┌─────┬──────────┬───────────────────────────┬─────────────────────┐
+│ Id  │ Username │ Password (Hash)           │ PasswordSalt        │
+├─────┼──────────┼───────────────────────────┼─────────────────────┤
+│  1  │ admin    │ x7k9m2pQr4tL8vN...       │ a8f3k2wE5rT9...     │
+│  2  │ john     │ bH3jK7mN0qR5sU...       │ c4d6f8gH2jK1...     │
+└─────┴──────────┴───────────────────────────┴─────────────────────┘
+  ✅ Passwords are hashed               ✅ Each user has unique salt
+  ✅ Cannot reverse the hash            ✅ Same password → different hash
+```
+
+> 💡 **The `User.cs` entity** includes both fields:
+>
+> ```csharp
+> public string Password { get; set; }     // Stored as hash
+> public string PasswordSalt { get; set; } // Random salt per user
+> ```
+
+---
+
+### 🎯 Password Hashing Key Takeaways
+
+1. **Never store plain text passwords** — always hash before saving to the database
+2. **Salt** is a random value added to the password before hashing — prevents rainbow table attacks
+3. **PBKDF2** is a NIST-recommended algorithm with configurable iterations for brute-force resistance
+4. **`RandomNumberGenerator`** generates cryptographically secure random bytes for the salt
+5. **Store both hash and salt** — salt is needed to verify the password during login
+6. **Base64 encoding** converts raw bytes to string format suitable for database storage
+7. **Conditional hashing** — only re-hash when the password field is provided (allows partial updates)
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
+## 35. Create, Read, Update, Delete Users (CRUD) Endpoints in Web API
+
+This section covers the **User CRUD endpoints** built using the **Service Layer pattern**. Unlike previous controllers (Role, RolePrivilege) that held business logic directly, the `UserController` delegates everything to the `UserService` — making it thin and clean.
+
+---
+
+### 3️⃣5️⃣.1️⃣ UserController Setup
+
+The controller injects `IUserService` instead of the repository directly:
+
+```csharp
+[Route("api/[controller]")]
+[ApiController]
+public class UserController : ControllerBase
+{
+    private readonly ILogger<UserController> _logger;
+    private readonly IMapper _mapper;
+    private readonly APIResponse _apiResponse;
+    private readonly IUserService _userService;
+
+    public UserController(ILogger<UserController> logger, IMapper mapper, IUserService userService)
+    {
+        _logger = logger;
+        _mapper = mapper;
+        _apiResponse = new();
+        _userService = userService;
+    }
+}
+```
+
+> 📌 Notice the controller depends on `IUserService`, **not** `ICollegeRepository<User>`. The repository is consumed inside the service — the controller doesn't know about it.
+
+---
+
+### 3️⃣5️⃣.2️⃣ Create User Endpoint
+
+```csharp
+[HttpPost]
+[Route("Create")]
+[ProducesResponseType(StatusCodes.Status201Created)]
+[ProducesResponseType(StatusCodes.Status400BadRequest)]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(StatusCodes.Status403Forbidden)]
+[ProducesResponseType(StatusCodes.Status500InternalServerError)]
+public async Task<ActionResult<APIResponse>> CreateUserAsync(UserDTO dto)
+{
+    try
+    {
+        var userCreated = await _userService.CreateUserAsync(dto);
+
+        _apiResponse.Data = userCreated;
+        _apiResponse.Status = true;
+        _apiResponse.StatusCode = HttpStatusCode.OK;
+        return Ok(_apiResponse);
+    }
+    catch (Exception ex)
+    {
+        _apiResponse.Errors.Add(ex.Message);
+        _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+        _apiResponse.Status = false;
+        return _apiResponse;
+    }
+}
+```
+
+**What `_userService.CreateUserAsync(dto)` does internally:**
+
+```csharp
+public async Task<bool> CreateUserAsync(UserDTO dto)
+{
+    //new way
+    ArgumentNullException.ThrowIfNull(dto, nameof(dto));
+
+    var existingUser = await _userRepository.GetAsync(u => u.Username.Equals(dto.Username));
+    if (existingUser != null)
+    {
+        throw new Exception("The username already taken");
+    }
+
+    User user = _mapper.Map<User>(dto);
+    user.IsDeleted = false;
+    user.CreatedDate = DateTime.Now;
+    user.ModifiedDate = DateTime.Now;
+
+    if (!string.IsNullOrEmpty(dto.Password))
+    {
+        var passwordHash = CreatePasswordHashWithSalt(dto.Password);
+        user.Password = passwordHash.PasswordHash;
+        user.PasswordSalt = passwordHash.Salt;
+    }
+
+    await _userRepository.CreateAsync(user);
+    return true;
+}
+```
+
+> 🔑 **Key Points:**
+>
+> - `ArgumentNullException.ThrowIfNull()` — Modern C# null check (replaces the old `if (dto == null) throw ...` pattern)
+> - **Duplicate check** — Checks if username already exists before creating
+> - **Password hashing** — Automatically hashes the password with salt before saving
+> - **Audit fields** — Sets `IsDeleted`, `CreatedDate`, `ModifiedDate` server-side
+
+---
+
+### 3️⃣5️⃣.3️⃣ Get All Users Endpoint
+
+```csharp
+[HttpGet]
+[Route("All", Name = "GetAllUsers")]
+[ProducesResponseType(StatusCodes.Status200OK)]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(StatusCodes.Status403Forbidden)]
+[ProducesResponseType(StatusCodes.Status500InternalServerError)]
+public async Task<ActionResult<APIResponse>> GetStudentsAsync()
+{
+    try
+    {
+        var users = await _userService.GetUsersAsync();
+
+        _apiResponse.Data = users;
+        _apiResponse.Status = true;
+        _apiResponse.StatusCode = HttpStatusCode.OK;
+
+        return Ok(_apiResponse);
+    }
+    catch (Exception ex)
+    {
+        _apiResponse.Errors.Add(ex.Message);
+        _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+        _apiResponse.Status = false;
+        return _apiResponse;
+    }
+}
+```
+
+> 💡 The service internally uses `GetAllByFilterAsync(u => !u.IsDeleted)` — this **soft-delete filter** ensures deleted users are never returned in the results.
+
+---
+
+### 3️⃣5️⃣.4️⃣ Get User by ID & Name
+
+**Get by ID:**
+
+```csharp
+[HttpGet]
+[Route("{id:int}", Name = "GetUserById")]
+[ProducesResponseType(StatusCodes.Status200OK)]
+[ProducesResponseType(StatusCodes.Status400BadRequest)]
+[ProducesResponseType(StatusCodes.Status404NotFound)]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(StatusCodes.Status403Forbidden)]
+[ProducesResponseType(StatusCodes.Status500InternalServerError)]
+public async Task<ActionResult<APIResponse>> GetUserByIdAsync(int id)
+{
+    try
+    {
+        if (id <= 0)
+        {
+            _logger.LogWarning("give a valid Id!");
+            return BadRequest();
+        }
+
+        var user = await _userService.GetUserById(id);
+        if (user == null)
+        {
+            _logger.LogError("given id student not found!");
+            return NotFound($"The student with id {id} not found!.");
+        }
+
+        _apiResponse.Data = user;
+        _apiResponse.Status = true;
+        _apiResponse.StatusCode = HttpStatusCode.OK;
+
+        return Ok(_apiResponse);
+    }
+    catch (Exception ex)
+    {
+        _apiResponse.Errors.Add(ex.Message);
+        _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+        _apiResponse.Status = false;
+        return _apiResponse;
+    }
+}
+```
+
+**Get by Name:**
+
+```csharp
+[HttpGet("{username:alpha}", Name = "GetUserByName")]
+[ProducesResponseType(StatusCodes.Status200OK)]
+[ProducesResponseType(StatusCodes.Status400BadRequest)]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(StatusCodes.Status403Forbidden)]
+[ProducesResponseType(StatusCodes.Status404NotFound)]
+[ProducesResponseType(StatusCodes.Status500InternalServerError)]
+public async Task<ActionResult<APIResponse>> GetUserByNameAsync(string username)
+{
+
+    try
+    {
+        if (string.IsNullOrEmpty(username))
+            return BadRequest();
+
+        var user = await _userService.GetUserByName(username);
+        if (user == null)
+            return NotFound($"The student with name {username} not found!.");
+
+        _apiResponse.Data = user;
+        _apiResponse.Status = true;
+        _apiResponse.StatusCode = HttpStatusCode.OK;
+
+        return Ok(_apiResponse);
+    }
+    catch (Exception ex)
+    {
+        _apiResponse.Errors.Add(ex.Message);
+        _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+        _apiResponse.Status = false;
+        return _apiResponse;
+    }
+}
+```
+
+---
+
+### 3️⃣5️⃣.5️⃣ Update User Endpoint
+
+```csharp
+[HttpPut]
+[Route("Update")]
+[ProducesResponseType(StatusCodes.Status201Created)]
+[ProducesResponseType(StatusCodes.Status500InternalServerError)]
+[ProducesResponseType(StatusCodes.Status400BadRequest)]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(StatusCodes.Status403Forbidden)]
+public async Task<ActionResult<APIResponse>> UpdateUserAsync(UserDTO dto)
+{
+    try
+    {
+        if (dto == null || dto.Id <= 0)
+            return BadRequest();
+
+        var result = await _userService.UpdateUserAsync(dto);
+
+        _apiResponse.Status = true;
+        _apiResponse.StatusCode = HttpStatusCode.OK;
+        _apiResponse.Data = result;
+
+        return Ok(_apiResponse);
+
+    }
+    catch (Exception ex)
+    {
+        _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+        _apiResponse.Status = false;
+        _apiResponse.Errors.Add(ex.Message);
+        return _apiResponse;
+    }
+}
+```
+
+> 🔑 The service's `UpdateUserAsync` **re-hashes the password** only if a new password is provided. If the client sends an update without a password, the existing hash is preserved.
+
+---
+
+### 3️⃣5️⃣.6️⃣ Delete User Endpoint (Soft Delete)
+
+```csharp
+[HttpDelete]
+[Route("Delete/{id:int}", Name = "DeleteUserById")]
+[ProducesResponseType(StatusCodes.Status201Created)]
+[ProducesResponseType(StatusCodes.Status500InternalServerError)]
+[ProducesResponseType(StatusCodes.Status400BadRequest)]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(StatusCodes.Status403Forbidden)]
+[ProducesResponseType(StatusCodes.Status404NotFound)]
+public async Task<ActionResult<APIResponse>> DeleteUserAsync(int id)
+{
+    try
+    {
+
+        var user = await _userService.DeleteUserAsync(id);
+
+        _apiResponse.Status = true;
+        _apiResponse.StatusCode = HttpStatusCode.OK;
+        _apiResponse.Data = user;
+
+        return Ok(_apiResponse);
+
+    }
+    catch (Exception ex)
+    {
+        _apiResponse.StatusCode = HttpStatusCode.InternalServerError;
+        _apiResponse.Status = false;
+        _apiResponse.Errors.Add(ex.Message);
+        return _apiResponse;
+    }
+}
+```
+
+**What `_userService.DeleteUserAsync(id)` does internally:**
+
+```csharp
+public async Task<bool> DeleteUserAsync(int userId)
+{
+    if (userId <= 0)
+        throw new ArgumentException(nameof(userId));
+
+    var existingUser = await _userRepository.GetAsync(u => !u.IsDeleted && u.Id == userId, true);
+    if (existingUser == null)
+    {
+        throw new Exception($"User not found with the id: {userId}");
+    }
+
+    //1. Hard delete - you can try this
+    //2. Soft delete - we will do this now
+    existingUser.IsDeleted = true;
+
+    await _userRepository.UpdateAsync(existingUser);
+    return true;
+}
+```
+
+> 💡 **Soft Delete vs Hard Delete:**
+>
+> | Type            | What Happens                          | Data Recovery   | Used Here |
+> | --------------- | ------------------------------------- | --------------- | --------- |
+> | **Hard Delete** | Row is permanently removed from DB    | ❌ Not possible | No        |
+> | **Soft Delete** | `IsDeleted = true` — row still exists | ✅ Can recover  | Yes ✅    |
+>
+> Soft delete preserves data for audit trails and allows recovery. All read queries filter by `!u.IsDeleted` to exclude soft-deleted users.
+
+---
+
+### 📊 User API Endpoints Summary
+
+| Endpoint                       | Method | Description                                  |
+| ------------------------------ | ------ | -------------------------------------------- |
+| `POST /api/user/Create`        | POST   | Create a new user (with password hashing)    |
+| `GET /api/user/All`            | GET    | Get all active users (excludes soft-deleted) |
+| `GET /api/user/{id}`           | GET    | Get user by ID                               |
+| `GET /api/user/{username}`     | GET    | Get user by username                         |
+| `PUT /api/user/Update`         | PUT    | Update user (re-hashes password if provided) |
+| `DELETE /api/user/Delete/{id}` | DELETE | Soft-delete a user (`IsDeleted = true`)      |
+
+---
+
+### 🎯 Key Takeaways
+
+1. **Service Layer Pattern** — `UserController` delegates all logic to `UserService`, keeping the controller thin
+2. **Password Hashing** — Uses PBKDF2 with per-user salt for secure password storage
+3. **Two DTOs** — `UserDTO` (with password, for write) and `UserReadonlyDTO` (without password, for read)
+4. **Soft Delete** — Sets `IsDeleted = true` instead of removing the row from the database
+5. **Duplicate Username Check** — Prevents creating users with an already-taken username
+6. **`ArgumentNullException.ThrowIfNull()`** — Modern C# pattern for null validation
+7. **Conditional Password Update** — Only re-hashes when a new password is provided
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
 ## 🎉 Conclusion
 
 You've learned:
@@ -8264,6 +9145,15 @@ You've learned:
 - ✅ Full CRUD operations for Role management (Create, List, Update, Delete)
 - ✅ Role Privilege CRUD for managing per-role permissions
 - ✅ Filtering RolePrivileges by RoleId using `GetAllByFilterAsync()` with lambda expressions
+- ✅ Service Layer pattern for separating business logic from controllers
+- ✅ Why fat controllers are a problem and how the service layer solves it
+- ✅ Interface + Implementation pattern for services (`IUserService` / `UserService`)
+- ✅ Password hashing with salt using PBKDF2 for secure credential storage
+- ✅ `RandomNumberGenerator` for cryptographically secure salt generation
+- ✅ Two-DTO pattern (`UserDTO` for write, `UserReadonlyDTO` for read)
+- ✅ Full User CRUD endpoints using the Service Layer pattern
+- ✅ Soft delete vs Hard delete strategies for user management
+- ✅ `ArgumentNullException.ThrowIfNull()` for modern null validation
 
 **Happy Coding!** 🚀
 
