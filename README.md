@@ -71,6 +71,7 @@ A comprehensive guide to understanding Web APIs, their evolution, and practical 
     35.4. [Get User by ID & Name](#354-get-user-by-id--name)
     35.5. [Update User Endpoint](#355-update-user-endpoint)
     35.6. [Delete User Endpoint (Soft Delete)](#356-delete-user-endpoint-soft-delete)
+36. [Middleware in ASP.NET Core Web API](#36-middleware-in-aspnet-core-web-api)
 
 ---
 
@@ -9094,6 +9095,45 @@ public async Task<bool> DeleteUserAsync(int userId)
 
 ---
 
+## 36. Middleware in ASP.NET Core Web API
+
+### 🤔 What is Middleware?
+
+**Middleware** is software that sits in the ASP.NET Core request pipeline and handles requests and responses. Each middleware component can:
+
+- **Process** an incoming request before passing it to the next component
+- **Short-circuit** the pipeline (stop processing and return a response early)
+- **Process** the outgoing response after the next component finishes
+
+Think of middleware as a series of **layers** that every HTTP request must pass through:
+
+```
+  Request ──▶ [ Middleware 1 ] ──▶ [ Middleware 2 ] ──▶ [ Middleware 3 ] ──▶ Endpoint
+ Response ◀── [ Middleware 1 ] ◀── [ Middleware 2 ] ◀── [ Middleware 3 ] ◀── Endpoint
+```
+
+### 📋 Topics Covered (in the dedicated repo)
+
+| #   | Topic                                 |
+| --- | ------------------------------------- |
+| 1   | What is Middleware & Request Pipeline |
+| 2   | Inline Middleware (`app.Use`)         |
+| 3   | Terminal Middleware (`app.Run`)       |
+| 4   | `app.Map` – Branch the Pipeline       |
+| 5   | Multiple Middleware & Execution Order |
+| 6   | Custom Middleware Class               |
+| 7   | `UseWhen` – Conditional Middleware    |
+| 8   | Built-in Middleware in ASP.NET Core   |
+| 9   | Exception Handling Middleware         |
+| 10  | Real-World Middleware Use Cases       |
+
+> 📖 **Full detailed guide with code examples:**
+> 👉 [ASP.NET Core Web API – Middleware (Dedicated Repository)](https://github.com/KartikZCoding/ASP.NET-Core-Web-API-Middleware/blob/master/README.md)
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
 ## 🎉 Conclusion
 
 You've learned:
@@ -9154,6 +9194,7 @@ You've learned:
 - ✅ Full User CRUD endpoints using the Service Layer pattern
 - ✅ Soft delete vs Hard delete strategies for user management
 - ✅ `ArgumentNullException.ThrowIfNull()` for modern null validation
+- ✅ Middleware concepts — request pipeline, inline, terminal, custom classes & exception handling ([detailed guide](https://github.com/KartikZCoding/ASP.NET-Core-Web-API-Middleware/blob/master/README.md))
 
 **Happy Coding!** 🚀
 
