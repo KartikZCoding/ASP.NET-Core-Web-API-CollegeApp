@@ -72,6 +72,7 @@ A comprehensive guide to understanding Web APIs, their evolution, and practical 
     35.5. [Update User Endpoint](#355-update-user-endpoint)
     35.6. [Delete User Endpoint (Soft Delete)](#356-delete-user-endpoint-soft-delete)
 36. [Middleware in ASP.NET Core Web API](#36-middleware-in-aspnet-core-web-api)
+37. [Logging in ASP.NET Core Web API](#37-logging-in-aspnet-core-web-api)
 
 ---
 
@@ -9134,6 +9135,41 @@ Think of middleware as a series of **layers** that every HTTP request must pass 
 
 ---
 
+## 37. Logging in ASP.NET Core Web API
+
+### 🤔 What is Logging?
+
+**Logging** is the practice of recording application events, errors, and diagnostic information during runtime. ASP.NET Core provides a powerful built-in logging framework and supports third-party providers like **Serilog**, **NLog**, and more.
+
+Proper logging helps you:
+
+- 🐛 **Debug issues** — trace what happened before an error occurred
+- 📊 **Monitor performance** — identify slow operations and bottlenecks
+- 🔒 **Audit activity** — track who did what and when
+- 🚨 **Alert on failures** — detect and respond to critical errors in production
+
+### 📋 Topics Covered (in the dedicated repo)
+
+| #   | Topic                                                     |
+| --- | --------------------------------------------------------- |
+| 1   | What is Logging & Why It Matters                          |
+| 2   | Built-in `ILogger` in ASP.NET Core                        |
+| 3   | Log Levels (Trace, Debug, Info, Warning, Error, Critical) |
+| 4   | Logging to Console & Debug Window                         |
+| 5   | Logging to Files with Serilog                             |
+| 6   | Structured Logging & Log Templates                        |
+| 7   | Logging Configuration in `appsettings.json`               |
+| 8   | Dependency Injection with `ILogger<T>`                    |
+| 9   | Exception Logging Best Practices                          |
+| 10  | Real-World Logging Patterns                               |
+
+> 📖 **Full detailed guide with code examples:**
+> 👉 [ASP.NET Core Web API – Logging (Dedicated Repository)](https://github.com/KartikZCoding/ASP.NET-Core-Web-API-Logging/blob/master/README.md)
+
+⬆️ [Back to Table of Contents](#-table-of-contents)
+
+---
+
 ## 🎉 Conclusion
 
 You've learned:
@@ -9195,6 +9231,7 @@ You've learned:
 - ✅ Soft delete vs Hard delete strategies for user management
 - ✅ `ArgumentNullException.ThrowIfNull()` for modern null validation
 - ✅ Middleware concepts — request pipeline, inline, terminal, custom classes & exception handling ([detailed guide](https://github.com/KartikZCoding/ASP.NET-Core-Web-API-Middleware/blob/master/README.md))
+- ✅ Logging concepts — built-in ILogger, log levels, Serilog, structured logging & best practices ([detailed guide](https://github.com/KartikZCoding/ASP.NET-Core-Web-API-Logging/blob/master/README.md))
 
 **Happy Coding!** 🚀
 
